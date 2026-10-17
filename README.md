@@ -6,13 +6,13 @@ No build step: plain HTML/CSS/ES modules.
 
 ## Features
 
-- Multiple documents, listed in a sidebar (a slide-out drawer on phones). You can create, rename (edit the title), delete (undoable) and reorder them by dragging.
+- Multiple documents in nested folders, shown in a sidebar (a slide-out drawer on phones). You can create, rename and delete (undoably) documents and folders, and drag them to reorder or move them into folders.
 - Nested bullets: Enter, Tab / Shift+Tab, move, collapse, complete (strikethrough), hide completed
-- Line colors: Alt+1–6 (red, orange, yellow, green, blue, purple), Alt+0 to clear; ◐ button on phones
+- Line colors: Ctrl+1–6 (red, orange, yellow, green, blue, purple), Ctrl+0 to clear; ◐ button on phones
 - Drag and drop: drag a bullet to move an item (long-press first on touch). Drop it on a sidebar document to move it there, or between documents to turn it into a document.
 - Zoom into any item (click its bullet), with breadcrumbs; the Android back button zooms back out
-- Search (all words must match; matching items are shown with their parents)
-- Inline `**bold**`, `*italic*`, `` `code` ``, clickable links and `#tags`
+- Search the current document, or all documents with the **All** button. All words must match; matching items are shown with their parents.
+- Inline `**bold**`, `__italic__`, `` `code` `` and clickable links (Dynalist syntax)
 - Multi-line paste becomes separate items (indentation is kept)
 - Undo/redo, export/import a JSON backup, export as indented text
 - A touch toolbar on phones (indent, outdent, move, complete, collapse, zoom, undo, redo)

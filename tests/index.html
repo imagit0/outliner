@@ -112,6 +112,34 @@ test('docOf finds the top-level document', () => {
   eq(o.docOf(ROOT), null);
 });
 
+test('folders: docOf / isDoc / allDocs', () => {
+  const o = new Outline();
+  const f1 = o.insert(ROOT, null, { t: 'F1', f: true });
+  const f2 = o.insert(f1.id, null, { t: 'F2', f: true });
+  const d1 = o.insert(f2.id, null, { t: 'D1' });
+  const d0 = o.insert(ROOT, f1.id, { t: 'D0' });
+  const a = o.insert(d1.id, null, { t: 'a' });
+  const b = o.insert(a.id, null, { t: 'b' });
+  eq(o.docOf(b.id).id, d1.id);
+  eq(o.docOf(d1.id).id, d1.id);
+  eq(o.docOf(f2.id), null);
+  ok(o.isDoc(d1.id) && o.isDoc(d0.id) && !o.isDoc(f1.id) && !o.isDoc(a.id));
+  eq(o.allDocs().map((d) => d.t), ['D1', 'D0']);
+  ok(!o.move(f1.id, f2.id, null), 'folder cannot go into its own subfolder');
+});
+
+test('merge: folder flag survives, missing f equals false', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.a, { f: true });
+  R.update(s.a, { t: 'Folder A' });
+  const m = merge(s.base, L.nodes, R.nodes);
+  eq([m[s.a].t, m[s.a].f], ['Folder A', true]);
+  const R2 = new Outline(clone(s.base));
+  R2.nodes[s.b].f = false;
+  ok(sameNodes(s.base, R2.nodes));
+});
+
 test('merge: delete vs untouched deletes', () => {
   const s = setup();
   const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
@@ -189,7 +217,7 @@ test('restore bumps m only on changed nodes', () => {
 });
 
 test('format keeps raw text as textContent', () => {
-  for (const t of ['plain', '**bold** and *it* `c<o>de`', 'see https://example.com/a?b=1&c=2.', '#tag and a#nottag', '<script>x<\/script>', '']) {
+  for (const t of ['plain', '**bold** and __it__ `c<o>de`', 'see https://example.com/a?b=1&c=2.', 'snake_case and *stars*', '<script>x<\/script>', '']) {
     const div = document.createElement('div');
     div.innerHTML = format(t);
     eq(div.textContent, t, `for ${t}`);
@@ -197,6 +225,9 @@ test('format keeps raw text as textContent', () => {
   const d = document.createElement('div');
   d.innerHTML = format('go to https://example.com/x.');
   eq(d.querySelector('.link').dataset.href, 'https://example.com/x');
+  d.innerHTML = format('a __b__ *c*');
+  eq(d.querySelector('i').textContent, 'b');
+  eq(d.querySelectorAll('i, b').length, 1, 'single * is plain text');
 });
 
 out.innerHTML += `\n${pass} passed, ${fail} failed\n`;

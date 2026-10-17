@@ -16,13 +16,15 @@
     <button id="side-btn" class="icon" type="button" aria-label="Documents">☰</button>
     <nav id="crumbs"></nav>
     <input id="search" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
+    <button id="search-all" type="button" aria-pressed="false" title="Search all documents (instead of only this one)">All</button>
     <span id="sync" data-state="off" title=""></span>
     <button id="menu-btn" class="icon" type="button" aria-label="Menu">⋮</button>
   </header>
 
   <aside id="sidebar" aria-label="Documents">
     <div id="docs"></div>
-    <button id="new-doc" type="button">+ New document</button>
+    <button id="new-doc" class="side-add" type="button">+ New document</button>
+    <button id="new-folder" class="side-add" type="button">+ New folder</button>
   </aside>
   <div id="scrim"></div>
 
@@ -76,9 +78,10 @@
       <tr><td>Ctrl+Shift+↑ / ↓</td><td>Move item up / down</td></tr>
       <tr><td>Ctrl+↑ / ↓</td><td>Collapse / expand</td></tr>
       <tr><td>Ctrl+Enter</td><td>Mark complete</td></tr>
-      <tr><td>Alt+1 … Alt+6</td><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td></tr>
-      <tr><td>Alt+0</td><td>Remove color</td></tr>
+      <tr><td>Ctrl+1 … Ctrl+6</td><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td></tr>
+      <tr><td>Ctrl+0</td><td>Remove color</td></tr>
       <tr><td>Drag a bullet</td><td>Move the item (long-press on touch). Drop it on a document in the sidebar to move it there.</td></tr>
+      <tr><td>Drag in sidebar</td><td>Reorder documents and folders, or drop them into a folder</td></tr>
       <tr><td>Alt+→ / Alt+←</td><td>Zoom in / out (or click a bullet)</td></tr>
       <tr><td>Backspace at start</td><td>Join with the item above (deletes if empty)</td></tr>
       <tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo</td></tr>
@@ -86,7 +89,8 @@
       <tr><td>Ctrl+S</td><td>Sync now (or tap the sync icon)</td></tr>
       <tr><td>Esc</td><td>Stop editing</td></tr>
     </table>
-    <p>Formatting: <code>**bold**</code>, <code>*italic*</code>, <code>`code`</code>, links, and <code>#tags</code> (click a tag to search for it).</p>
+    <p>Formatting: <code>**bold**</code>, <code>__italic__</code>, <code>`code`</code>, and links.</p>
+    <p>Search looks in the current document; press <b>All</b> next to the search box to search every document.</p>
     <button id="help-close" type="button">Close</button>
   </dialog>
 </body>

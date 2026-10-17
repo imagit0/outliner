@@ -9,7 +9,9 @@
 //                 pointing further right (or onto an expanded item) = first child
 //   title         first child of the zoomed item
 //   sidebar doc   item: middle = move into that document, edges = becomes a
-//                 document there; document: before / after (reorder)
+//                 document there; document/folder: before / after (reorder)
+//   sidebar folder  middle = into the folder (an item becomes a document
+//                 there), edges = before / after
 
 const $ = (s) => document.querySelector(s);
 const LONG_PRESS = 350;
@@ -41,9 +43,9 @@ export class Drag {
   down(e) {
     if (e.button !== 0 || this.s) return;
     const bullet = e.target.closest('#outline .bullet');
-    const doc = !bullet && e.target.closest('#docs .doc');
+    const doc = !bullet && e.target.closest('#docs .entry');
     if (!bullet && !doc) return;
-    if (doc && e.target.closest('.del')) return;
+    if (doc && e.target.closest('button')) return;
     this.s = {
       kind: bullet ? 'item' : 'doc',
       id: bullet ? bullet.closest('.item').dataset.item : doc.dataset.doc,
@@ -156,22 +158,27 @@ export class Drag {
     this.overSidebar = !!(el && el.closest('#sidebar'));
     if (!el) return;
 
-    // Sidebar documents
-    const docEl = el.closest('#docs .doc');
+    // Sidebar documents and folders
+    const docEl = el.closest('#docs .entry');
     if (docEl) {
       const id = docEl.dataset.doc;
-      if (id === s.id) return;
+      if (id === s.id || this.ui.o.isAncestor(s.id, id)) return; // into itself
+      const isFolder = !!this.ui.o.get(id).f;
       const r = docEl.getBoundingClientRect();
       const f = (s.y - r.top) / r.height;
       let where;
-      if (s.kind === 'doc') where = f < 0.5 ? 'before' : 'after';
+      if (s.kind === 'doc' && !isFolder) where = f < 0.5 ? 'before' : 'after';
       else where = f < 0.25 ? 'before' : f > 0.75 ? 'after' : 'into';
-      if (where === 'into') docEl.classList.add('drop-into');
-      else this.showLine(where === 'before' ? r.top : r.bottom, r.left + 8, r.right - 8);
+      if (where === 'into') {
+        docEl.classList.add('drop-into');
+      } else {
+        const indent = parseFloat(getComputedStyle(docEl).paddingLeft) || 8;
+        this.showLine(where === 'before' ? r.top : r.bottom, r.left + indent, r.right - 8);
+      }
       this.target = { id, where };
       return;
     }
-    if (s.kind === 'doc') return; // documents only reorder within the sidebar
+    if (s.kind === 'doc') return; // documents and folders stay in the sidebar
 
     const main = $('#outline');
     const mainR = main.getBoundingClientRect();

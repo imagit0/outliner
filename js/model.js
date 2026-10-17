@@ -13,9 +13,12 @@
 //   d   done (bool)
 //   c   collapsed (bool)
 //   cl  color label 1-6 (0 or missing = none)
+//   f   folder (bool; missing = false)
 //   m   last-modified time in ms (used to break merge ties)
 //
-// The root's children are documents (shown in the sidebar).
+// The sidebar tree is made of folders and documents: a folder (f) lives under
+// the root or another folder; any other node whose parent is the root or a
+// folder is a document. Everything below a document is outline items.
 
 export const ROOT = 'root';
 export const FORMAT = 'outliner/1';
@@ -69,11 +72,31 @@ export class Outline {
     return o;
   }
 
-  // The document (child of root) that contains id.
+  // Root or a folder: holds documents and folders rather than items.
+  isContainer(id) {
+    const n = this.nodes[id];
+    return !!n && (n.id === ROOT || !!n.f);
+  }
+
+  isDoc(id) {
+    const n = this.nodes[id];
+    return !!n && !n.f && n.p !== null && this.isContainer(n.p);
+  }
+
+  // The document that contains id (or id itself if it is one).
   docOf(id) {
     let n = this.nodes[id];
-    while (n && n.p !== ROOT && n.p !== null) n = this.nodes[n.p];
-    return n && n.p === ROOT ? n : null;
+    while (n && n.p !== null && !this.isContainer(n.p)) n = this.nodes[n.p];
+    return n && n.p !== null && !n.f ? n : null;
+  }
+
+  // All documents in sidebar order.
+  allDocs(pid = ROOT, out = []) {
+    for (const n of this.children(pid)) {
+      if (n.f) this.allDocs(n.id, out);
+      else out.push(n);
+    }
+    return out;
   }
 
   toJSON() { return { format: FORMAT, nodes: this.nodes }; }
@@ -215,10 +238,11 @@ export function cmpNode(a, b) {
   return a.k < b.k ? -1 : a.k > b.k ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl'];
+export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl', 'f'];
 
-// Missing optional fields (older nodes have no cl) count as their default.
-const norm = (f, v) => (v === undefined && f === 'cl' ? 0 : v);
+// Missing optional fields (older nodes have no cl / f) count as their default.
+const DEFAULTS = { cl: 0, f: false };
+const norm = (f, v) => (v === undefined && f in DEFAULTS ? DEFAULTS[f] : v);
 
 export function sameNode(a, b) {
   return FIELDS.every((f) => norm(f, a[f]) === norm(f, b[f]));

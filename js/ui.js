@@ -34,6 +34,7 @@ export class UI {
     this.toolbar = $('#toolbar');
     this.palette = $('#palette');
     this.docs = $('#docs');
+    this.searchAllBtn = $('#search-all');
 
     document.body.classList.toggle('side-hidden', !!load('sideHidden'));
     this.bind();
@@ -45,13 +46,13 @@ export class UI {
 
   // Make sure we're looking at something that exists inside a document.
   ensureZoom() {
-    if (this.zoom && this.zoom !== ROOT && this.o.docOf(this.zoom)) return;
-    let docs = this.o.children(ROOT);
+    if (this.zoom && this.o.docOf(this.zoom)) return;
+    let docs = this.o.allDocs();
     if (!docs.length) {
-      const d = this.o.insert(ROOT, null, { t: 'My outline' });
+      const d = this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: 'My outline' });
       this.o.insert(d.id, null, {});
       this.onChange();
-      docs = this.o.children(ROOT);
+      docs = this.o.allDocs();
     }
     const last = load('lastDoc');
     this.zoom = docs.some((d) => d.id === last) ? last : docs[0].id;
@@ -62,6 +63,8 @@ export class UI {
     this.ensureZoom();
     const doc = this.o.docOf(this.zoom);
     if (doc.id !== load('lastDoc')) save('lastDoc', doc.id);
+    this.searchAllBtn.setAttribute('aria-pressed', String(!!this.prefs.searchAll));
+    if (this.query.trim() && this.prefs.searchAll) return this.renderSearchAll();
     const visible = this.visibleSet();
     const z = this.o.get(this.zoom);
     let html = `<div class="title text${z.d ? ' done' : ''}${colorClass(z)}" contenteditable="plaintext-only" spellcheck="true" data-id="${z.id}" data-placeholder="Untitled">${format(z.t)}</div>`;
@@ -104,36 +107,73 @@ export class UI {
   }
 
   renderCrumbs() {
-    const anc = this.o.ancestors(this.zoom).filter((a) => a.id !== ROOT);
+    const anc = this.o.ancestors(this.zoom).filter((a) => a.id !== ROOT && !a.f);
     this.crumbs.innerHTML = anc
       .map((a) => `<a href="#${a.id}" data-zoom="${a.id}">${esc(trim(a.t) || 'Untitled')}</a>`)
       .join('<span class="sep">›</span>');
   }
 
   renderSidebar() {
-    const cur = this.o.docOf(this.zoom);
-    this.docs.innerHTML = this.o
-      .children(ROOT)
-      .map(
-        (d) =>
-          `<div class="doc${cur && d.id === cur.id ? ' active' : ''}" data-doc="${d.id}">` +
-          `<span class="name">${esc(d.t || 'Untitled')}</span>` +
-          `<button class="del" type="button" title="Delete document" aria-label="Delete document">×</button></div>`,
-      )
-      .join('');
+    const cur = this.o.docOf(this.zoom)?.id;
+    const btn = (cls, title, label) =>
+      `<button class="${cls}" type="button" title="${title}" aria-label="${title}">${label}</button>`;
+    const tree = (pid, depth) =>
+      this.o.children(pid).map((n) => {
+        if (n.f) {
+          const open = !n.c;
+          return (
+            `<div class="entry folder${open ? ' open' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
+            `<span class="twisty"></span><span class="name">${esc(n.t || 'Untitled folder')}</span>` +
+            btn('add', 'New document in this folder', '+') + btn('ren', 'Rename folder', '✎') + btn('del', 'Delete folder', '×') +
+            `</div>` + (open ? tree(n.id, depth + 1) : '')
+          );
+        }
+        return (
+          `<div class="entry doc${n.id === cur ? ' active' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
+          `<span class="name">${esc(n.t || 'Untitled')}</span>` +
+          btn('ren', 'Rename document', '✎') + btn('del', 'Delete document', '×') +
+          `</div>`
+        );
+      }).join('');
+    this.docs.innerHTML = tree(ROOT, 0);
   }
+
+  // Search results across every document, grouped under document headings.
+  renderSearchAll() {
+    const terms = this.terms();
+    const set = new Set();
+    const hitDocs = new Set();
+    for (const n of Object.values(this.o.nodes)) {
+      if (n.id === ROOT || n.f || (n.d && !this.prefs.showDone) || !matches(n.t, terms)) continue;
+      const doc = this.o.docOf(n.id);
+      if (!doc) continue;
+      hitDocs.add(doc.id);
+      for (let x = n; x && x.id !== doc.id && !set.has(x.id); x = this.o.get(x.p)) set.add(x.id);
+    }
+    let html = '';
+    for (const d of this.o.allDocs()) {
+      if (!hitDocs.has(d.id)) continue;
+      html += `<div class="result-doc"><a href="#${d.id}" data-open="${d.id}">${esc(d.t || 'Untitled')}</a></div>`;
+      const kids = this.renderChildren(d.id, set);
+      if (kids) html += `<div class="list">${kids}</div>`;
+    }
+    this.main.innerHTML = html || `<p class="empty">No matches in any document.</p>`;
+    this.crumbs.textContent = 'Searching all documents';
+    this.renderSidebar();
+  }
+
+  terms() { return this.query.toLowerCase().split(/\s+/).filter(Boolean); }
 
   // With a search query: the set of matching nodes plus their ancestors (up to
   // the zoom root). Without one: null (show everything).
   visibleSet() {
-    const terms = this.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const terms = this.terms();
     if (!terms.length) return null;
     const set = new Set();
     for (const n of Object.values(this.o.nodes)) {
       if (n.id === ROOT || n.id === this.zoom) continue;
       if (n.d && !this.prefs.showDone) continue;
-      const t = n.t.toLowerCase();
-      if (!terms.every((w) => t.includes(w))) continue;
+      if (!matches(n.t, terms)) continue;
       if (!this.o.isAncestor(this.zoom, n.id)) continue;
       for (let x = n; x && x.id !== this.zoom && !set.has(x.id); x = this.o.get(x.p)) set.add(x.id);
     }
@@ -248,6 +288,8 @@ export class UI {
       return true;
     }
     if (!prevId || prevId === this.zoom) return true;
+    // In all-documents search the item above may belong to another document.
+    if (this.o.docOf(prevId) !== this.o.docOf(id) || this.o.isDoc(prevId)) return true;
     const prev = this.o.get(prevId);
     if (hasKids && (this.o.prevSibling(id)?.id !== prevId || this.o.hasChildren(prevId))) return true;
     this.op(() => {
@@ -278,7 +320,8 @@ export class UI {
 
   outdent(id) {
     const n = this.o.get(id);
-    if (id === this.zoom || n.p === this.zoom) return;
+    // Never outdent out of the zoomed item or out of a document.
+    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const parent = this.o.get(n.p);
@@ -409,9 +452,11 @@ export class UI {
       return true;
     }
     if (where === 'into') {
-      // Last child (used for dropping onto a document in the sidebar).
+      // Last child (dropping onto a document or folder in the sidebar).
       const kids = this.o.children(targetId).filter((k) => k.id !== src);
-      return this.o.move(src, targetId, kids.length ? kids[kids.length - 1].id : null);
+      if (!this.o.move(src, targetId, kids.length ? kids[kids.length - 1].id : null)) return false;
+      if (t.f && t.c) this.o.update(targetId, { c: false });
+      return true;
     }
     if (where === 'after') return this.o.move(src, t.p, targetId);
     const sibs = this.o.children(t.p).filter((s) => s.id !== src);
@@ -446,28 +491,74 @@ export class UI {
     document.body.classList.remove('side-open');
   }
 
-  newDoc() {
+  // New document next to the current one (same folder), or inside `folderId`.
+  newDoc(folderId = null) {
     this.checkpoint();
-    const d = this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: '' });
+    let d;
+    if (folderId) {
+      d = this.o.insert(folderId, lastChildId(this.o, folderId), { t: '' });
+      if (this.o.get(folderId).c) this.o.update(folderId, { c: false });
+    } else {
+      const cur = this.o.docOf(this.zoom);
+      d = cur ? this.o.insert(cur.p, cur.id, { t: '' }) : this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: '' });
+    }
     this.o.insert(d.id, null, {});
     this.onChange();
     this.openDoc(d.id);
     this.focus(d.id, 0);
   }
 
-  deleteDoc(id) {
-    const d = this.o.get(id);
-    const name = d.t || 'Untitled';
-    if (!confirm(`Delete the document "${name}" and everything in it?\n\n(Ctrl+Z / Undo brings it back.)`)) return;
-    const docs = this.o.children(ROOT);
-    const i = docs.indexOf(d);
-    const nb = docs[i + 1] || docs[i - 1];
-    const current = this.o.docOf(this.zoom)?.id === id;
+  newFolder() {
+    const name = prompt('Folder name:', '');
+    if (name === null) return;
+    this.checkpoint();
+    this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: name.trim() || 'New folder', f: true });
+    this.onChange();
+    this.renderSidebar();
+  }
+
+  renameEntry(id) {
+    const n = this.o.get(id);
+    const name = prompt(n.f ? 'Rename folder:' : 'Rename document:', n.t);
+    if (name === null || name === n.t) return;
+    this.checkpoint();
+    this.o.update(id, { t: name });
+    this.onChange();
+    this.render();
+  }
+
+  // Delete a document or a folder (with everything in it). Undoable.
+  deleteEntry(id) {
+    const n = this.o.get(id);
+    let msg;
+    if (n.f) {
+      const count = this.o.allDocs(id).length;
+      msg = `Delete the folder "${n.t || 'Untitled folder'}"` + (count ? ` and the ${count} document${count > 1 ? 's' : ''} in it?` : '?');
+    } else {
+      msg = `Delete the document "${n.t || 'Untitled'}" and everything in it?`;
+    }
+    if (!confirm(`${msg}\n\n(Ctrl+Z / Undo brings it back.)`)) return;
     this.checkpoint();
     this.o.remove(id);
     this.onChange();
-    if (current && nb) this.go(nb.id);
-    else this.render();
+    if (!this.o.get(this.zoom)) {
+      this.zoom = null;
+      save('lastDoc', null);
+    }
+    this.render();
+  }
+
+  toggleFolder(id) {
+    this.o.update(id, { c: !this.o.get(id).c });
+    this.onChange();
+    this.renderSidebar();
+  }
+
+  setSearchAll(on) {
+    this.prefs.searchAll = on;
+    save('prefs', this.prefs);
+    this.render();
+    this.search.focus();
   }
 
   toggleSidebar() {
@@ -498,14 +589,17 @@ export class UI {
     m.addEventListener('click', (e) => {
       const t = e.target;
       if (t.closest('.add')) return this.addItem();
+      const open = t.closest('[data-open]');
+      if (open) {
+        e.preventDefault();
+        return this.openDoc(open.dataset.open);
+      }
       const row = t.closest('.row');
       const id = row && row.closest('.item').dataset.item;
       if (t.classList.contains('toggle') && id) {
         if (this.o.hasChildren(id)) this.setCollapsed(id, !this.o.get(id).c);
       } else if (t.classList.contains('bullet') && id) {
         this.zoomTo(id);
-      } else if (t.classList.contains('tag') && !this.isEditing(t)) {
-        this.setQuery(t.textContent);
       }
     });
 
@@ -516,8 +610,6 @@ export class UI {
         e.preventDefault();
         window.open(link.dataset.href, '_blank', 'noopener');
       }
-      const tag = e.target.closest('.tag');
-      if (tag && !this.isEditing(tag)) e.preventDefault();
     });
 
     m.addEventListener('focusin', (e) => {
@@ -605,8 +697,8 @@ export class UI {
       if (e.key === 'Escape') this.setQuery('');
       if (e.key === 'Enter' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const first = this.visibleIds()[1];
-        if (first) this.focus(first, 'end');
+        const first = this.main.querySelector('.list .text');
+        if (first) this.focus(first.dataset.id, 'end');
       }
     });
 
@@ -623,13 +715,19 @@ export class UI {
     $('#side-btn').addEventListener('click', () => this.toggleSidebar());
     $('#scrim').addEventListener('click', () => document.body.classList.remove('side-open'));
     $('#new-doc').addEventListener('click', () => this.newDoc());
+    $('#new-folder').addEventListener('click', () => this.newFolder());
     this.docs.addEventListener('click', (e) => {
       if (this.drag.justDropped()) return;
-      const d = e.target.closest('.doc');
-      if (!d) return;
-      if (e.target.closest('.del')) this.deleteDoc(d.dataset.doc);
-      else this.openDoc(d.dataset.doc);
+      const entry = e.target.closest('.entry');
+      if (!entry) return;
+      const id = entry.dataset.doc;
+      if (e.target.closest('.del')) return this.deleteEntry(id);
+      if (e.target.closest('.ren')) return this.renameEntry(id);
+      if (e.target.closest('.add')) return this.newDoc(id);
+      if (this.o.get(id).f) return this.toggleFolder(id);
+      this.openDoc(id);
     });
+    this.searchAllBtn.addEventListener('click', () => this.setSearchAll(!this.prefs.searchAll));
 
     // Touch toolbar. Preventing pointerdown/mousedown keeps focus (and the
     // soft keyboard) on the item being edited.
@@ -686,7 +784,7 @@ export class UI {
     const n = this.o.get(id);
     if (n && n.t !== t) {
       this.o.update(id, { t });
-      if (n.p === ROOT) {
+      if (this.o.isDoc(id)) {
         const name = this.docs.querySelector(`[data-doc="${id}"] .name`);
         if (name) name.textContent = t || 'Untitled';
       }
@@ -710,12 +808,12 @@ export class UI {
     if ((mod || e.altKey) && e.shiftKey && key === 'ArrowDown') { handled(); return this.moveDown(id); }
     if (mod && key === 'ArrowUp') { handled(); return this.setCollapsed(id, true); }
     if (mod && key === 'ArrowDown') { handled(); return this.setCollapsed(id, false); }
-    if (e.altKey && !mod && !e.shiftKey && /^Digit[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(5))); }
+    if (mod && !e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
     if (e.altKey && key === 'ArrowRight') { handled(); return this.zoomTo(id); }
     if (e.altKey && key === 'ArrowLeft') {
       handled();
       const z = this.o.get(this.zoom);
-      if (z.p !== ROOT) { const back = z.id; this.zoomTo(z.p); this.focus(back, 'end'); }
+      if (!this.o.isDoc(z.id)) { const back = z.id; this.zoomTo(z.p); this.focus(back, 'end'); }
       return;
     }
     if (key === 'Escape') { handled(); el.blur(); return; }
@@ -737,6 +835,10 @@ export class UI {
 // ---------- helpers ----------
 
 const trim = (s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
+const matches = (text, terms) => {
+  const t = text.toLowerCase();
+  return terms.every((w) => t.includes(w));
+};
 const colorClass = (n) => (n.cl ? ` cl-${n.cl}` : '');
 
 function lastChildId(o, pid) {
