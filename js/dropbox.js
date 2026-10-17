@@ -9,6 +9,7 @@ const AUTH_URL = 'https://www.dropbox.com/oauth2/authorize';
 const TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token';
 const CONTENT = 'https://content.dropboxapi.com/2';
 const API = 'https://api.dropboxapi.com/2';
+const NOTIFY = 'https://notify.dropboxapi.com/2';
 
 export class ConflictError extends Error {}
 export class AuthError extends Error {}
@@ -120,6 +121,58 @@ export async function download(path) {
   const m = await call(`${API}/files/get_metadata`, { 'Content-Type': 'application/json' }, JSON.stringify({ path }));
   if (!m.ok) throw new Error(`get_metadata ${m.status}`);
   return { text, rev: (await m.json()).rev };
+}
+
+async function rpc(endpoint, args) {
+  const res = await call(`${API}/${endpoint}`, { 'Content-Type': 'application/json' }, JSON.stringify(args));
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const e = new Error(`${endpoint}: ${err.error_summary || res.status}`);
+    e.summary = String(err.error_summary || '');
+    throw e;
+  }
+  return res.json();
+}
+
+// Current revision of a file (cheap: no content), or null if it doesn't exist.
+export async function getRev(path) {
+  try {
+    return (await rpc('files/get_metadata', { path })).rev;
+  } catch (e) {
+    if (e.summary && e.summary.startsWith('path/not_found')) return null;
+    throw e;
+  }
+}
+
+// ---- change notifications ----
+// A cursor marks a point in the app folder's history; longpoll() holds the
+// request open until something changes after it (or the timeout passes).
+
+export async function latestCursor() {
+  return (await rpc('files/list_folder/get_latest_cursor', { path: '', recursive: false })).cursor;
+}
+
+// Resolves { changes: bool, backoff?: seconds }. Needs no auth.
+export async function longpoll(cursor, signal, timeout = 120) {
+  const res = await fetch(`${NOTIFY}/files/list_folder/longpoll`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cursor, timeout }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`longpoll ${res.status}`);
+  return res.json();
+}
+
+// Entries changed since `cursor`, and the new cursor.
+export async function changesSince(cursor) {
+  const entries = [];
+  let page = { cursor, has_more: true };
+  while (page.has_more) {
+    page = await rpc('files/list_folder/continue', { cursor: page.cursor });
+    entries.push(...page.entries);
+  }
+  return { entries, cursor: page.cursor };
 }
 
 // Uploads only if the file is still at `rev` (or does not exist, when rev is

@@ -32,7 +32,14 @@ When a device syncs, it downloads the file. If anyone else changed it since the 
 - Same item's text edited on both devices: the newer edit wins, and the other text is kept as a sibling item marked "(conflict)". Nothing is lost.
 - An item deleted on one device but edited on the other: the item is kept.
 
-Sync runs a few seconds after you stop typing, when the app is opened or brought back to the foreground, when the device comes back online, and once a minute while the app is open. Dropbox also keeps 30 days of file history for `outline.json`.
+When sync runs:
+
+- **Sending:** about 1 second after you stop typing, or at most 4 seconds into a long typing streak.
+- **Receiving:** while the app is open, it holds a Dropbox change-notification request open (long-poll), so edits from another device arrive within a few seconds.
+- **Other times:** when the app is opened or brought back to the foreground, when the device comes back online, and once a minute as a fallback.
+- **On demand:** Ctrl+S, tapping the sync icon, or ☰ → Sync now.
+
+Most checks only ask Dropbox for the file's revision. The full file is downloaded only when another device has changed it. Dropbox also keeps 30 days of file history for `outline.json`.
 
 ## One-time setup
 

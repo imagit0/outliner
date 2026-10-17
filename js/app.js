@@ -108,7 +108,7 @@ menu.addEventListener('click', async (e) => {
       dropbox.disconnect();
       return sync.forget();
     case 'm-sync':
-      return sync.run();
+      return syncNow();
     case 'm-done':
       prefs.showDone = !prefs.showDone;
       save('prefs', prefs);
@@ -160,12 +160,29 @@ function toText(pid, depth = 0) {
 }
 
 // ---------- sync triggers ----------
+function syncNow() {
+  persistNow();
+  if (!dropbox.isConnected()) return setStatus('off');
+  sync.run();
+}
+
+// Ctrl+S (Cmd+S on Mac): sync now instead of the browser's "save page".
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    syncNow();
+  }
+});
+$('#sync').addEventListener('click', syncNow);
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     persistNow();
+    sync.stopWatching();
     if (sync.dirty) sync.run();
   } else {
     sync.run();
+    sync.startWatching();
   }
 });
 window.addEventListener('pagehide', persistNow);
@@ -183,6 +200,7 @@ setInterval(() => {
   }
   setStatus(dropbox.isConnected() ? 'ok' : 'off');
   sync.run();
+  if (document.visibilityState === 'visible') sync.startWatching();
   requestPersistence();
   if (!location.hash && outline.size() <= 1) {
     const first = outline.children(ROOT)[0];

@@ -65,7 +65,9 @@ header {
   background: var(--bg); color: var(--fg); font: inherit; font-size: 14px;
 }
 #search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-#sync { width: 20px; text-align: center; color: var(--muted); flex: none; cursor: default; }
+#sync { min-width: 28px; height: 28px; line-height: 28px; text-align: center; color: var(--muted); flex: none; cursor: pointer; border-radius: 6px; }
+#sync:hover { background: var(--hover); }
+#sync[data-state="off"]::before { content: "○"; }
 #sync[data-state="syncing"] { animation: spin 1s linear infinite; }
 #sync[data-state="ok"] { color: #3a9d5d; }
 #sync[data-state="offline"], #sync[data-state="auth"], #sync[data-state="error"] { color: #d08a1e; }

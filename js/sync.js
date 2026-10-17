@@ -15,6 +15,8 @@ import { merge } from './merge.js';
 import { FORMAT, parseDoc, sameNodes } from './model.js';
 import { load, save } from './store.js';
 
+const MAX_WAIT = 4000;
+
 export class Sync {
   // getNodes(): current local node map. replaceNodes(map): adopt a merged map.
   // onStatus(state, detail): 'off' | 'syncing' | 'ok' | 'offline' | 'auth' | 'error'
@@ -33,11 +35,50 @@ export class Sync {
     this.onStatus(state, detail);
   }
 
-  // Sync after `ms` of quiet (edits keep pushing it back).
-  schedule(ms = 3000) {
+  // Sync after `ms` of quiet. Edits keep pushing it back, but never more than
+  // MAX_WAIT after the first unsynced edit, so long typing streaks still sync.
+  schedule(ms = 1000) {
     if (!dropbox.isConnected()) return;
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.run(), ms);
+    if (!this.pendingSince) this.pendingSince = Date.now();
+    const wait = Math.min(ms, Math.max(0, this.pendingSince + MAX_WAIT - Date.now()));
+    this.timer = setTimeout(() => this.run(), wait);
+  }
+
+  // Listen for changes made by other devices while the app is visible.
+  startWatching() {
+    if (this.watchAbort || !dropbox.isConnected()) return;
+    const abort = (this.watchAbort = new AbortController());
+    this.watch(abort.signal);
+  }
+
+  stopWatching() {
+    if (this.watchAbort) this.watchAbort.abort();
+    this.watchAbort = null;
+  }
+
+  async watch(signal) {
+    const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+    let cursor = null;
+    while (!signal.aborted && dropbox.isConnected()) {
+      try {
+        if (!cursor) cursor = await dropbox.latestCursor();
+        const res = await dropbox.longpoll(cursor, signal);
+        if (res.changes) {
+          const page = await dropbox.changesSince(cursor);
+          cursor = page.cursor;
+          const ours = page.entries.find((e) => e.path_lower === SYNC_PATH.toLowerCase());
+          // Our own uploads also show up here; only sync for someone else's.
+          if (ours && ours.rev !== load('baseRev')) this.run();
+        }
+        if (res.backoff) await sleep(res.backoff);
+      } catch (e) {
+        if (signal.aborted || e instanceof dropbox.AuthError) break;
+        cursor = null;
+        await sleep(15);
+      }
+    }
+    if (this.watchAbort && this.watchAbort.signal === signal) this.watchAbort = null;
   }
 
   // Local copy differs from what was last synced?
@@ -48,6 +89,7 @@ export class Sync {
 
   async run() {
     clearTimeout(this.timer);
+    this.pendingSince = null;
     if (!dropbox.isConnected()) return this.setStatus('off');
     if (this.running) { this.again = true; return; }
     this.running = true;
@@ -80,6 +122,16 @@ export class Sync {
     const snap = structuredClone(this.getNodes());
     const base = load('base');
     const baseRev = load('baseRev');
+
+    // Fast path: if the cloud file hasn't changed since our last sync, skip
+    // the download and just push our changes (if any).
+    if (base && baseRev && (await dropbox.getRev(SYNC_PATH)) === baseRev) {
+      if (sameNodes(base, snap)) return;
+      const rev = await dropbox.upload(SYNC_PATH, JSON.stringify({ format: FORMAT, nodes: snap }), baseRev);
+      this.commit(snap, rev);
+      return;
+    }
+
     const remote = await dropbox.download(SYNC_PATH);
 
     let target;
@@ -119,6 +171,7 @@ export class Sync {
   }
 
   forget() {
+    this.stopWatching();
     save('base', null);
     save('baseRev', null);
     this.setStatus('off');
