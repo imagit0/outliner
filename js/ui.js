@@ -96,7 +96,7 @@ export class UI {
     const inner = open ? this.renderChildren(n.id, visible) : '';
     return (
       `<div class="item${n.d ? ' done' : ''}" data-item="${n.id}">` +
-      `<div class="row">` +
+      `<div class="row${n.h ? ` h${n.h}` : ''}">` +
       `<span class="toggle${has ? (open ? ' open' : ' closed') : ''}" aria-hidden="true"></span>` +
       `<span class="bullet${has && !open ? ' folded' : ''}" title="Click to zoom, drag to move"></span>` +
       `<div class="text${colorClass(n)}" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}">${format(n.t)}</div>` +
@@ -123,15 +123,16 @@ export class UI {
           const open = !n.c;
           return (
             `<div class="entry folder${open ? ' open' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
-            `<span class="twisty"></span><span class="name">${esc(n.t || 'Untitled folder')}</span>` +
+            `<span class="twisty"></span>${open ? ICON_FOLDER_OPEN : ICON_FOLDER}<span class="name">${esc(n.t || 'Untitled folder')}</span>` +
+            `<span class="acts">` +
             btn('add', 'New document in this folder', '+') + btn('ren', 'Rename folder', '✎') + btn('del', 'Delete folder', '×') +
-            `</div>` + (open ? tree(n.id, depth + 1) : '')
+            `</span></div>` + (open ? tree(n.id, depth + 1) : '')
           );
         }
         return (
           `<div class="entry doc${n.id === cur ? ' active' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
-          `<span class="name">${esc(n.t || 'Untitled')}</span>` +
-          btn('ren', 'Rename document', '✎') + btn('del', 'Delete document', '×') +
+          `${ICON_DOC}<span class="name">${esc(n.t || 'Untitled')}</span>` +
+          `<span class="acts">` + btn('ren', 'Rename document', '✎') + btn('del', 'Delete document', '×') + `</span>` +
           `</div>`
         );
       }).join('');
@@ -380,6 +381,68 @@ export class UI {
       if (next === cur) return false;
       this.o.update(id, { cl: next });
       return document.activeElement?.dataset?.id === id || off !== 'end' ? { id, off } : null;
+    });
+  }
+
+  // Heading level 1-3; choosing the current level again (or 0) removes it.
+  setHeading(id, h) {
+    if (id === this.zoom) return;
+    const off = this.caretOf(id);
+    this.op(() => {
+      const cur = this.o.get(id).h || 0;
+      const next = h === cur ? 0 : h;
+      if (next === cur) return false;
+      this.o.update(id, { h: next });
+      return { id, off };
+    });
+  }
+
+  // Selection inside the item being edited, as [start, end] offsets.
+  selection(id) {
+    const el = this.textEl(id);
+    const sel = getSelection();
+    if (!el || !sel.rangeCount || !el.contains(sel.anchorNode)) {
+      const len = this.o.get(id).t.length;
+      return [len, len];
+    }
+    const at = (node, off) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      r.setEnd(node, off);
+      return r.toString().length;
+    };
+    const a = at(sel.anchorNode, sel.anchorOffset), b = at(sel.focusNode, sel.focusOffset);
+    return [Math.min(a, b), Math.max(a, b)];
+  }
+
+  // Wrap the selection in pre/post markers (or unwrap if already wrapped).
+  wrap(id, pre, post = pre) {
+    const [s, e] = this.selection(id);
+    this.op(() => {
+      const t = this.o.get(id).t;
+      if (t.slice(s - pre.length, s) === pre && t.slice(e, e + post.length) === post) {
+        this.o.update(id, { t: t.slice(0, s - pre.length) + t.slice(s, e) + t.slice(e + post.length) });
+        return { id, off: e - pre.length };
+      }
+      this.o.update(id, { t: t.slice(0, s) + pre + t.slice(s, e) + post + t.slice(e) });
+      return { id, off: s === e ? s + pre.length : e + pre.length + post.length };
+    });
+  }
+
+  // Insert a [text](url) link, using the selected text as the link text.
+  insertLink(id) {
+    const [s, e] = this.selection(id);
+    const t = this.o.get(id).t;
+    const selected = t.slice(s, e);
+    const looksLikeUrl = /^(https?:\/\/|www\.)\S+$/i.test(selected);
+    const url = prompt('Link address:', looksLikeUrl ? selected : 'https://');
+    if (!url || url === 'https://') return this.focus(id, e);
+    let label = looksLikeUrl ? '' : selected;
+    if (!label) label = prompt('Link text (optional):', '') || '';
+    const link = label ? `[${label}](${url.trim()})` : url.trim();
+    this.op(() => {
+      this.o.update(id, { t: t.slice(0, s) + link + t.slice(e) });
+      return { id, off: s + link.length };
     });
   }
 
@@ -743,11 +806,19 @@ export class UI {
       this.command(b.dataset.cmd, id);
     });
     this.palette.addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-color]');
+      const b = e.target.closest('button');
       if (!b) return;
       const id = document.activeElement?.dataset?.id || this.focusId;
       this.palette.hidden = true;
-      if (id && this.o.get(id)) this.setColor(id, Number(b.dataset.color));
+      if (!id || !this.o.get(id)) return;
+      if (b.dataset.color) return this.setColor(id, Number(b.dataset.color));
+      switch (b.dataset.fmt) {
+        case 'h1': case 'h2': case 'h3': return this.setHeading(id, Number(b.dataset.fmt[1]));
+        case 'h0': return this.setHeading(id, 0);
+        case 'bold': return this.wrap(id, '**');
+        case 'italic': return this.wrap(id, '__');
+        case 'link': return this.insertLink(id);
+      }
     });
   }
 
@@ -809,6 +880,10 @@ export class UI {
     if (mod && key === 'ArrowUp') { handled(); return this.setCollapsed(id, true); }
     if (mod && key === 'ArrowDown') { handled(); return this.setCollapsed(id, false); }
     if (mod && !e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
+    if (mod && e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-3]$/.test(e.code)) { handled(); return this.setHeading(id, Number(e.code.slice(-1))); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyB') { handled(); return this.wrap(id, '**'); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyI') { handled(); return this.wrap(id, '__'); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyK') { handled(); return this.insertLink(id); }
     if (e.altKey && key === 'ArrowRight') { handled(); return this.zoomTo(id); }
     if (e.altKey && key === 'ArrowLeft') {
       handled();
@@ -835,6 +910,13 @@ export class UI {
 // ---------- helpers ----------
 
 const trim = (s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
+
+const svg = (body) =>
+  `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">${body}</svg>`;
+// Page with a folded top-right corner.
+const ICON_DOC = svg('<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/>');
+const ICON_FOLDER = svg('<path d="M1.5 3.5h4.5l1.5 1.5h7v8.5h-13z"/>');
+const ICON_FOLDER_OPEN = svg('<path d="M1.5 13.5v-10h4.5l1.5 1.5h6v2"/><path d="M1.5 13.5l2-6h12l-2 6z"/>');
 const matches = (text, terms) => {
   const t = text.toLowerCase();
   return terms.every((w) => t.includes(w));

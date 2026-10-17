@@ -94,6 +94,15 @@ test('merge: color on one side, text on the other', () => {
   eq([m[s.b].t, m[s.b].cl], ['B', 3]);
 });
 
+test('merge: heading on one side, color on the other', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.b, { h: 2 });
+  R.update(s.b, { cl: 4 });
+  const m = merge(s.base, L.nodes, R.nodes);
+  eq([m[s.b].h, m[s.b].cl], [2, 4]);
+});
+
 test('missing color equals no color', () => {
   const s = setup();
   const R = new Outline(clone(s.base));
@@ -225,6 +234,14 @@ test('format keeps raw text as textContent', () => {
   const d = document.createElement('div');
   d.innerHTML = format('go to https://example.com/x.');
   eq(d.querySelector('.link').dataset.href, 'https://example.com/x');
+  for (const t of ['see [the docs](https://example.com/x?a=1) now', '[bare](example.com)', '[a](b) and [c](d)']) {
+    d.innerHTML = format(t);
+    eq(d.textContent, t, `link text for ${t}`);
+  }
+  d.innerHTML = format('see [the docs](https://example.com/x?a=1) now');
+  eq([d.querySelector('.link').textContent, d.querySelector('.link').dataset.href], ['the docs', 'https://example.com/x?a=1']);
+  d.innerHTML = format('[bare](example.com)');
+  eq(d.querySelector('.link').dataset.href, 'https://example.com');
   d.innerHTML = format('a __b__ *c*');
   eq(d.querySelector('i').textContent, 'b');
   eq(d.querySelectorAll('i, b').length, 1, 'single * is plain text');

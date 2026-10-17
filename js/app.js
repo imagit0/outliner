@@ -8,7 +8,33 @@ import { load, save, requestPersistence } from './store.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', ...load('prefs', {}) };
+
+// ---------- appearance (theme + font) ----------
+// Each font falls back to something similar on Android, which lacks most
+// Windows fonts.
+const FONTS = {
+  arial: ['Arial', 'Arial, "Liberation Sans", Roboto, Helvetica, sans-serif'],
+  system: ['System default', 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'],
+  segoe: ['Segoe UI', '"Segoe UI", Roboto, system-ui, sans-serif'],
+  verdana: ['Verdana', 'Verdana, "DejaVu Sans", Roboto, sans-serif'],
+  tahoma: ['Tahoma', 'Tahoma, "DejaVu Sans", Roboto, sans-serif'],
+  georgia: ['Georgia (serif)', 'Georgia, "Noto Serif", "Droid Serif", serif'],
+  times: ['Times New Roman (serif)', '"Times New Roman", "Noto Serif", "Droid Serif", serif'],
+  mono: ['Monospace', 'Consolas, "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", monospace'],
+};
+
+function applyAppearance() {
+  const root = document.documentElement;
+  root.dataset.theme = prefs.theme;
+  root.style.setProperty('--font', (FONTS[prefs.font] || FONTS.arial)[1]);
+  // Match the browser/OS chrome (Android status bar, installed-app title bar).
+  requestAnimationFrame(() => {
+    $('#theme-color').content = getComputedStyle(document.body).backgroundColor;
+  });
+}
+applyAppearance();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyAppearance);
 
 let nodes = load('doc');
 let outline;
@@ -121,6 +147,10 @@ menu.addEventListener('click', async (e) => {
       return $('#import-file').click();
     case 'm-help':
       return $('#help').showModal();
+    case 'm-settings':
+      $('#set-theme').value = prefs.theme;
+      $('#set-font').value = prefs.font;
+      return $('#settings').showModal();
   }
 });
 
@@ -143,6 +173,18 @@ $('#import-file').addEventListener('change', async (e) => {
 });
 
 $('#help-close').addEventListener('click', () => $('#help').close());
+
+$('#set-font').innerHTML = Object.entries(FONTS)
+  .map(([k, [label, stack]]) => `<option value="${k}" style='font-family:${stack}'>${label}</option>`)
+  .join('');
+for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font']]) {
+  $(id).addEventListener('change', (e) => {
+    prefs[key] = e.target.value;
+    save('prefs', prefs);
+    applyAppearance();
+  });
+}
+$('#settings-close').addEventListener('click', () => $('#settings').close());
 
 function download(name, text, type) {
   const a = document.createElement('a');

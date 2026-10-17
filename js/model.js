@@ -14,6 +14,7 @@
 //   c   collapsed (bool)
 //   cl  color label 1-6 (0 or missing = none)
 //   f   folder (bool; missing = false)
+//   h   heading level 1-3 (0 or missing = normal text)
 //   m   last-modified time in ms (used to break merge ties)
 //
 // The sidebar tree is made of folders and documents: a folder (f) lives under
@@ -238,10 +239,10 @@ export function cmpNode(a, b) {
   return a.k < b.k ? -1 : a.k > b.k ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl', 'f'];
+export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl', 'f', 'h'];
 
-// Missing optional fields (older nodes have no cl / f) count as their default.
-const DEFAULTS = { cl: 0, f: false };
+// Missing optional fields (older nodes lack them) count as their default.
+const DEFAULTS = { cl: 0, f: false, h: 0 };
 const norm = (f, v) => (v === undefined && f in DEFAULTS ? DEFAULTS[f] : v);
 
 export function sameNode(a, b) {
