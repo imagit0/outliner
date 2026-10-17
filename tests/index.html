@@ -304,6 +304,16 @@ test('format keeps raw text as textContent', () => {
   eq([d.querySelector('.img').textContent, d.querySelector('.img').dataset.href], ['cat', 'https://x.io/c.jpg']);
   d.innerHTML = format('!https://x.io/c.png');
   eq(d.querySelector('.img').dataset.href, 'https://x.io/c.png');
+  for (const t of ['**__both__**', '__**both**__', '~~**==x==**~~', '**bold [__it__](https://e.com)**']) {
+    d.innerHTML = format(t);
+    eq(d.textContent, t, `nested text for ${t}`);
+  }
+  d.innerHTML = format('**__both__**');
+  eq(d.querySelector('b > i')?.textContent, 'both', 'bold contains italic');
+  d.innerHTML = format('__**both**__');
+  eq(d.querySelector('i > b')?.textContent, 'both', 'italic contains bold');
+  d.innerHTML = format('~~**==x==**~~');
+  eq(d.querySelector('s > b > mark')?.textContent, 'x', 'three levels');
   d.innerHTML = format('a __b__ *c*');
   eq(d.querySelector('i').textContent, 'b');
   eq(d.querySelectorAll('i, b').length, 1, 'single * is plain text');

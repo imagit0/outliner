@@ -211,11 +211,14 @@ export class UI {
 
   textEl(id) { return this.main.querySelector(`.text[data-id="${id}"]`); }
 
-  focus(id, offset = 'end') {
+  // Focus an item with the caret at `offset`, or select offset..end.
+  focus(id, offset = 'end', end = null) {
     const el = this.textEl(id);
     if (!el) return;
     el.focus({ preventScroll: true });
-    setCaret(el, offset === 'end' ? el.textContent.length : offset);
+    const start = offset === 'end' ? el.textContent.length : offset;
+    if (end !== null && end !== start) setSelectionRange(el, start, end);
+    else setCaret(el, start);
     el.scrollIntoView({ block: 'nearest' });
   }
 
@@ -264,7 +267,7 @@ export class UI {
       return;
     }
     this.render();
-    if (f) this.focus(f.id, f.off);
+    if (f) this.focus(f.id, f.off, f.end ?? null);
     this.onChange();
   }
 
@@ -435,17 +438,27 @@ export class UI {
     return [Math.min(a, b), Math.max(a, b)];
   }
 
-  // Wrap the selection in pre/post markers (or unwrap if already wrapped).
-  wrap(id, pre, post = pre) {
+  // Wrap the selection in a style marker (**, __, ~~, ==), or remove that
+  // style if the selection already has it. Styles stack: Ctrl+B then Ctrl+I
+  // on the same word gives **__word__**, and the word stays selected so the
+  // next shortcut applies to it too.
+  wrap(id, mark) {
     const [s, e] = this.selection(id);
     this.op(() => {
       const t = this.o.get(id).t;
-      if (t.slice(s - pre.length, s) === pre && t.slice(e, e + post.length) === post) {
-        this.o.update(id, { t: t.slice(0, s - pre.length) + t.slice(s, e) + t.slice(e + post.length) });
-        return { id, off: e - pre.length };
+      // Markers directly around the selection, innermost first.
+      const left = [], right = [];
+      for (let i = s; i >= 2 && STYLE_MARKS.includes(t.slice(i - 2, i)); i -= 2) left.push(i - 2);
+      for (let j = e; STYLE_MARKS.includes(t.slice(j, j + 2)); j += 2) right.push(j);
+      for (let k = 0; k < Math.min(left.length, right.length); k++) {
+        if (t.slice(left[k], left[k] + 2) === mark && t.slice(right[k], right[k] + 2) === mark) {
+          const a = left[k], b = right[k];
+          this.o.update(id, { t: t.slice(0, a) + t.slice(a + 2, b) + t.slice(b + 2) });
+          return { id, off: s - 2, end: e - 2 };
+        }
       }
-      this.o.update(id, { t: t.slice(0, s) + pre + t.slice(s, e) + post + t.slice(e) });
-      return { id, off: s === e ? s + pre.length : e + pre.length + post.length };
+      this.o.update(id, { t: t.slice(0, s) + mark + t.slice(s, e) + mark + t.slice(e) });
+      return { id, off: s + 2, end: e + 2 };
     });
   }
 
@@ -1077,7 +1090,9 @@ export class UI {
     // Table cells
     if (this.o.isCell(id)) {
       if (key === 'Tab') { handled(); return this.cellStep(id, e.shiftKey ? -1 : 1); }
-      if (mod && e.shiftKey && !e.altKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) {
+      // Row color: Ctrl+Shift+0..6, or Ctrl+Alt+0..6 (headings don't apply in
+      // cells, and some PCs swallow Ctrl+Shift+0).
+      if (mod && (e.shiftKey !== e.altKey) && /^(Digit|Numpad)[0-6]$/.test(e.code)) {
         handled();
         return this.setRowColor(id, Number(e.code.slice(-1)));
       }
@@ -1180,30 +1195,36 @@ export function getCaret(el) {
 export const hiddenMarker = (node) =>
   !document.body.classList.contains('show-md') && !!node.parentElement?.closest('.md');
 
-export function setCaret(el, offset) {
-  const sel = getSelection();
-  const r = document.createRange();
+const STYLE_MARKS = ['**', '__', '~~', '=='];
+
+// DOM position [node, offset] for a character offset in el. Never inside a
+// hidden marker (typing there would be invisible): such positions move to
+// just after the marker.
+function domPos(el, offset) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let left = offset;
   let node;
   while ((node = walker.nextNode())) {
-    // Never put the caret inside a hidden marker: typing there would be
-    // invisible. Land just after it instead.
     if (hiddenMarker(node) && left <= node.length) {
       left = 0;
       continue;
     }
-    if (left <= node.length) {
-      r.setStart(node, left);
-      r.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      return;
-    }
+    if (left <= node.length) return [node, left];
     left -= node.length;
   }
-  r.selectNodeContents(el);
-  r.collapse(false);
+  return [el, el.childNodes.length];
+}
+
+export function setCaret(el, offset) {
+  setSelectionRange(el, offset, offset);
+}
+
+export function setSelectionRange(el, start, end) {
+  const sel = getSelection();
+  const r = document.createRange();
+  r.setStart(...domPos(el, start));
+  if (end !== start) r.setEnd(...domPos(el, end));
+  else r.collapse(true);
   sel.removeAllRanges();
   sel.addRange(r);
 }

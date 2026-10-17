@@ -31,7 +31,8 @@ export const esc = (s) => s.replace(/[&<>"]/g, (c) => ESC[c]);
 const md = (s) => `<span class="md">${esc(s)}</span>`;
 const link = (href, inner, cls = '') =>
   `<span class="link${cls}" data-href="${esc(href)}">${inner}</span>`;
-const wrap = (mark, tag, s) => md(mark) + `<${tag}>${esc(s.slice(mark.length, -mark.length))}</${tag}>` + md(mark);
+// Styles nest (**__bold italic__**), so the inside is formatted again.
+const wrap = (mark, tag, s) => md(mark) + `<${tag}>${format(s.slice(mark.length, -mark.length))}</${tag}>` + md(mark);
 
 export function format(text) {
   if (!text) return '';
@@ -48,9 +49,14 @@ export function format(text) {
     else if (ital) out += wrap('__', 'i', ital);
     else if (strike) out += wrap('~~', 's', strike);
     else if (high) out += wrap('==', 'mark', high);
-    else if (label) out += md('[') + link(linkHref(target), esc(label)) + md(`](${target})`);
+    else if (label) out += md('[') + link(linkHref(target), formatPlain(label)) + md(`](${target})`);
     else if (url) out += link(url, esc(url));
     last = m.index + s.length;
   }
   return out + esc(text.slice(last));
+}
+
+// Link text may be styled (**bold** etc.) but must not contain more links.
+function formatPlain(text) {
+  return /https?:\/\/|\]\(/.test(text) ? esc(text) : format(text);
 }
