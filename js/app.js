@@ -202,6 +202,16 @@ $('#import-opml').addEventListener('change', async (e) => {
 
 $('#help-close').addEventListener('click', () => $('#help').close());
 
+// Any dialog closes when you click (or tap) outside it, on the dimmed backdrop.
+// Backdrop clicks are reported on the dialog itself, so check the position.
+for (const dlg of document.querySelectorAll('dialog')) {
+  dlg.addEventListener('click', (e) => {
+    if (e.target !== dlg) return;
+    const r = dlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
+  });
+}
+
 $('#set-font').innerHTML = Object.entries(FONTS)
   .map(([k, [label, stack]]) => `<option value="${k}" style='font-family:${stack}'>${label}</option>`)
   .join('');
