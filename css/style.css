@@ -208,10 +208,20 @@ main {
 /* --lh = height of the first text line, --pad = vertical padding around the
    text. Toggle and bullet are centred on the first line using both, so they
    stay aligned for headings and on touch screens (bigger padding). */
-.row { --lh: calc(var(--fs) * 1.5); --pad: 0px; display: flex; align-items: flex-start; padding: 1px 0; } /* 1px gap keeps colored lines apart */
-.row.h1 { --lh: calc(var(--fs) * 2.1); }
-.row.h2 { --lh: calc(var(--fs) * 1.85); }
-.row.h3 { --lh: calc(var(--fs) * 1.65); }
+/* Line spacing (Settings → Line spacing): --lhm is the line-height factor,
+   --pad extra space above and below each line. "Automatic" is Normal on
+   computers and Compact on phones. */
+:root { --lhm: 1.5; --pad: 0px; }
+@media (pointer: coarse), (max-width: 600px) { :root { --lhm: 1.35; --pad: 0px; } }
+:root[data-spacing="tight"] { --lhm: 1.2; --pad: 0px; }
+:root[data-spacing="compact"] { --lhm: 1.35; --pad: 0px; }
+:root[data-spacing="normal"] { --lhm: 1.5; --pad: 0px; }
+:root[data-spacing="relaxed"] { --lhm: 1.5; --pad: 3px; }
+:root[data-spacing="spacious"] { --lhm: 1.65; --pad: 5px; }
+.row { --lh: calc(var(--fs) * var(--lhm)); display: flex; align-items: flex-start; padding: 1px 0; } /* 1px gap keeps colored lines apart */
+.row.h1 { --lh: calc(var(--fs) * 1.4 * var(--lhm)); }
+.row.h2 { --lh: calc(var(--fs) * 1.23 * var(--lhm)); }
+.row.h3 { --lh: calc(var(--fs) * 1.1 * var(--lhm)); }
 .row > .text { line-height: var(--lh); }
 .row.h1 > .text { font-size: 1.55em; font-weight: 700; }
 .row.h2 > .text { font-size: 1.3em; font-weight: 700; }
@@ -394,7 +404,6 @@ body.col-resizing { user-select: none; }
   body.editing #toolbar { display: flex; }
   .toggle { opacity: 1; }
   .toggle:not(.open):not(.closed) { opacity: 0; }
-  .row { --pad: 3px; }
   #search { flex-basis: 120px; }
 }
 

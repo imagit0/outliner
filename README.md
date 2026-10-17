@@ -19,7 +19,7 @@ No build step: plain HTML/CSS/ES modules.
 - Ctrl+Shift+Backspace deletes an item, Ctrl+. expands or collapses it, Ctrl+Shift+M moves it to another document, Ctrl+, opens Settings
 - An empty document starts with a blank first line with the cursor in it
 - Headings, 3 levels (Ctrl+Alt+1–3, Ctrl+Alt+0 for normal text)
-- Settings (⋮ → Settings, or Ctrl+,): theme (dark by default, light, or same as the system), font (Arial by default), text size (17 by default), and whether formatting characters (`**`, `__`, `[](…)`) appear while you edit a line (off by default; Ctrl+M toggles it). These are saved per device.
+- Settings (⋮ → Settings, or Ctrl+,): theme (dark by default, light, or same as the system), font (Arial by default), text size (17 by default), line spacing (Automatic = compact on phones, normal on computers; or Tight / Compact / Normal / Relaxed / Spacious), and whether formatting characters (`**`, `__`, `[](…)`) appear while you edit a line (off by default; Ctrl+M toggles it). These are saved per device.
 - Phone toolbar: zoom, outdent, indent, complete, move up, move down, **Aa** (colors, headings, text styles, links, tables), move to document, delete, undo, redo.
 - Multi-line paste becomes separate items (indentation is kept)
 - Undo/redo, export/import a JSON backup, export as indented text

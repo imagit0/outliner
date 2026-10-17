@@ -9,7 +9,7 @@ import { exportOPML, parseOPML, insertItems } from './opml.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', ...load('prefs', {}) };
 const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 // ---------- appearance (theme + font) ----------
@@ -31,6 +31,8 @@ function applyAppearance() {
   root.dataset.theme = prefs.theme;
   root.style.setProperty('--font', (FONTS[prefs.font] || FONTS.arial)[1]);
   root.style.setProperty('--fs', `${prefs.size}px`);
+  if (prefs.spacing && prefs.spacing !== 'auto') root.dataset.spacing = prefs.spacing;
+  else delete root.dataset.spacing;
   document.body.classList.toggle('show-md', !!prefs.showMd);
   // Match the browser/OS chrome (Android status bar, installed-app title bar).
   requestAnimationFrame(() => {
@@ -216,7 +218,7 @@ $('#set-font').innerHTML = Object.entries(FONTS)
   .map(([k, [label, stack]]) => `<option value="${k}" style='font-family:${stack}'>${label}</option>`)
   .join('');
 $('#set-size').innerHTML = SIZES.map((s) => `<option value="${s}">${s}${s === 17 ? ' (default)' : ''}</option>`).join('');
-for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-size', 'size']]) {
+for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-size', 'size'], ['#set-spacing', 'spacing']]) {
   $(id).addEventListener('change', (e) => {
     prefs[key] = key === 'size' ? Number(e.target.value) : e.target.value;
     save('prefs', prefs);
@@ -237,6 +239,7 @@ function openSettings() {
   $('#set-theme').value = prefs.theme;
   $('#set-font').value = prefs.font;
   $('#set-size').value = String(prefs.size);
+  $('#set-spacing').value = prefs.spacing || 'auto';
   $('#set-md').checked = !!prefs.showMd;
   if (!$('#settings').open) $('#settings').showModal();
 }
