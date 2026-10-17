@@ -134,7 +134,8 @@ $('#import-file').addEventListener('change', async (e) => {
     ui.checkpoint();
     outline.restore(imported);
     new Outline(outline.nodes);
-    ui.zoomTo(ROOT);
+    ui.zoom = null;
+    ui.render();
     ui.onChange();
   } catch (err) {
     alert(`Import failed: ${err.message}`);
@@ -202,10 +203,6 @@ setInterval(() => {
   sync.run();
   if (document.visibilityState === 'visible') sync.startWatching();
   requestPersistence();
-  if (!location.hash && outline.size() <= 1) {
-    const first = outline.children(ROOT)[0];
-    if (first) ui.focus(first.id);
-  }
 })();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

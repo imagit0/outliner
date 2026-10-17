@@ -13,11 +13,18 @@
 </head>
 <body>
   <header>
-    <button id="menu-btn" class="icon" type="button" aria-label="Menu">☰</button>
+    <button id="side-btn" class="icon" type="button" aria-label="Documents">☰</button>
     <nav id="crumbs"></nav>
     <input id="search" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
     <span id="sync" data-state="off" title=""></span>
+    <button id="menu-btn" class="icon" type="button" aria-label="Menu">⋮</button>
   </header>
+
+  <aside id="sidebar" aria-label="Documents">
+    <div id="docs"></div>
+    <button id="new-doc" type="button">+ New document</button>
+  </aside>
+  <div id="scrim"></div>
 
   <div id="menu" hidden>
     <div id="m-status" class="status"></div>
@@ -42,11 +49,24 @@
     <button type="button" tabindex="-1" data-cmd="up" aria-label="Move up">↑</button>
     <button type="button" tabindex="-1" data-cmd="down" aria-label="Move down">↓</button>
     <button type="button" tabindex="-1" data-cmd="done" aria-label="Complete">✓</button>
+    <button type="button" tabindex="-1" data-cmd="palette" aria-label="Color">◐</button>
     <button type="button" tabindex="-1" data-cmd="collapse" aria-label="Collapse or expand">▸</button>
     <button type="button" tabindex="-1" data-cmd="zoom" aria-label="Zoom in">⤢</button>
     <button type="button" tabindex="-1" data-cmd="undo" aria-label="Undo">↶</button>
     <button type="button" tabindex="-1" data-cmd="redo" aria-label="Redo">↷</button>
   </div>
+
+  <div id="palette" hidden>
+    <button type="button" tabindex="-1" data-color="1" class="sw cl-1" aria-label="Red"></button>
+    <button type="button" tabindex="-1" data-color="2" class="sw cl-2" aria-label="Orange"></button>
+    <button type="button" tabindex="-1" data-color="3" class="sw cl-3" aria-label="Yellow"></button>
+    <button type="button" tabindex="-1" data-color="4" class="sw cl-4" aria-label="Green"></button>
+    <button type="button" tabindex="-1" data-color="5" class="sw cl-5" aria-label="Blue"></button>
+    <button type="button" tabindex="-1" data-color="6" class="sw cl-6" aria-label="Purple"></button>
+    <button type="button" tabindex="-1" data-color="0" class="sw none" aria-label="No color">✕</button>
+  </div>
+
+  <div id="drop-line" hidden></div>
 
   <dialog id="help">
     <h2>Keyboard shortcuts</h2>
@@ -56,6 +76,9 @@
       <tr><td>Ctrl+Shift+↑ / ↓</td><td>Move item up / down</td></tr>
       <tr><td>Ctrl+↑ / ↓</td><td>Collapse / expand</td></tr>
       <tr><td>Ctrl+Enter</td><td>Mark complete</td></tr>
+      <tr><td>Alt+1 … Alt+6</td><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td></tr>
+      <tr><td>Alt+0</td><td>Remove color</td></tr>
+      <tr><td>Drag a bullet</td><td>Move the item (long-press on touch). Drop it on a document in the sidebar to move it there.</td></tr>
       <tr><td>Alt+→ / Alt+←</td><td>Zoom in / out (or click a bullet)</td></tr>
       <tr><td>Backspace at start</td><td>Join with the item above (deletes if empty)</td></tr>
       <tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo</td></tr>

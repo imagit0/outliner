@@ -1,22 +1,28 @@
-// Outline editor: rendering, editing, keyboard and touch commands.
+// Outline editor: rendering, editing, keyboard and touch commands, sidebar.
 //
 // Each item's text is a contenteditable="plaintext-only" element whose
 // textContent is always the raw item text (see format.js). Typing only updates
 // the model; structural commands (split, indent, move...) mutate the model and
 // re-render the visible tree, then restore focus and caret.
+//
+// The root's children are documents. The main view always shows a document or
+// an item inside one (`zoom`); the sidebar lists the documents.
 
 import { ROOT } from './model.js';
 import { format, esc } from './format.js';
+import { load, save } from './store.js';
+import { Drag } from './drag.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const narrow = () => matchMedia('(max-width: 800px)').matches;
 
 export class UI {
   constructor(outline, { onChange, prefs }) {
     this.o = outline;
     this.onChange = onChange;
     this.prefs = prefs; // { showDone }
-    this.zoom = ROOT;
+    this.zoom = null;
     this.query = '';
     this.undoStack = [];
     this.redoStack = [];
@@ -26,21 +32,39 @@ export class UI {
     this.crumbs = $('#crumbs');
     this.search = $('#search');
     this.toolbar = $('#toolbar');
+    this.palette = $('#palette');
+    this.docs = $('#docs');
 
+    document.body.classList.toggle('side-hidden', !!load('sideHidden'));
     this.bind();
+    this.drag = new Drag(this);
     this.zoomFromHash();
   }
 
   // ---------- rendering ----------
 
+  // Make sure we're looking at something that exists inside a document.
+  ensureZoom() {
+    if (this.zoom && this.zoom !== ROOT && this.o.docOf(this.zoom)) return;
+    let docs = this.o.children(ROOT);
+    if (!docs.length) {
+      const d = this.o.insert(ROOT, null, { t: 'My outline' });
+      this.o.insert(d.id, null, {});
+      this.onChange();
+      docs = this.o.children(ROOT);
+    }
+    const last = load('lastDoc');
+    this.zoom = docs.some((d) => d.id === last) ? last : docs[0].id;
+    history.replaceState(null, '', location.pathname + location.search + '#' + this.zoom);
+  }
+
   render() {
-    if (!this.o.get(this.zoom)) this.zoom = ROOT;
+    this.ensureZoom();
+    const doc = this.o.docOf(this.zoom);
+    if (doc.id !== load('lastDoc')) save('lastDoc', doc.id);
     const visible = this.visibleSet();
     const z = this.o.get(this.zoom);
-    let html = '';
-    if (this.zoom !== ROOT) {
-      html += `<div class="title text${z.d ? ' done' : ''}" contenteditable="plaintext-only" spellcheck="true" data-id="${z.id}">${format(z.t)}</div>`;
-    }
+    let html = `<div class="title text${z.d ? ' done' : ''}${colorClass(z)}" contenteditable="plaintext-only" spellcheck="true" data-id="${z.id}" data-placeholder="Untitled">${format(z.t)}</div>`;
     const kids = this.renderChildren(this.zoom, visible);
     html += kids
       ? `<div class="list">${kids}</div>`
@@ -49,6 +73,7 @@ export class UI {
         : `<button class="add" type="button">+ Add item</button>`;
     this.main.innerHTML = html;
     this.renderCrumbs();
+    this.renderSidebar();
   }
 
   renderChildren(pid, visible) {
@@ -70,8 +95,8 @@ export class UI {
       `<div class="item${n.d ? ' done' : ''}" data-item="${n.id}">` +
       `<div class="row">` +
       `<span class="toggle${has ? (open ? ' open' : ' closed') : ''}" aria-hidden="true"></span>` +
-      `<span class="bullet${has && !open ? ' folded' : ''}" title="Zoom in"></span>` +
-      `<div class="text" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}">${format(n.t)}</div>` +
+      `<span class="bullet${has && !open ? ' folded' : ''}" title="Click to zoom, drag to move"></span>` +
+      `<div class="text${colorClass(n)}" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}">${format(n.t)}</div>` +
       `</div>` +
       (inner ? `<div class="children">${inner}</div>` : '') +
       `</div>`
@@ -79,16 +104,23 @@ export class UI {
   }
 
   renderCrumbs() {
-    if (this.zoom === ROOT) {
-      this.crumbs.innerHTML = '';
-      return;
-    }
-    const parts = [`<a href="#" data-zoom="${ROOT}">Home</a>`];
-    for (const a of this.o.ancestors(this.zoom)) {
-      if (a.id === ROOT) continue;
-      parts.push(`<a href="#${a.id}" data-zoom="${a.id}">${esc(trim(a.t) || '…')}</a>`);
-    }
-    this.crumbs.innerHTML = parts.join('<span class="sep">›</span>');
+    const anc = this.o.ancestors(this.zoom).filter((a) => a.id !== ROOT);
+    this.crumbs.innerHTML = anc
+      .map((a) => `<a href="#${a.id}" data-zoom="${a.id}">${esc(trim(a.t) || 'Untitled')}</a>`)
+      .join('<span class="sep">›</span>');
+  }
+
+  renderSidebar() {
+    const cur = this.o.docOf(this.zoom);
+    this.docs.innerHTML = this.o
+      .children(ROOT)
+      .map(
+        (d) =>
+          `<div class="doc${cur && d.id === cur.id ? ' active' : ''}" data-doc="${d.id}">` +
+          `<span class="name">${esc(d.t || 'Untitled')}</span>` +
+          `<button class="del" type="button" title="Delete document" aria-label="Delete document">×</button></div>`,
+      )
+      .join('');
   }
 
   // With a search query: the set of matching nodes plus their ancestors (up to
@@ -102,7 +134,7 @@ export class UI {
       if (n.d && !this.prefs.showDone) continue;
       const t = n.t.toLowerCase();
       if (!terms.every((w) => t.includes(w))) continue;
-      if (this.zoom !== ROOT && !this.o.isAncestor(this.zoom, n.id)) continue;
+      if (!this.o.isAncestor(this.zoom, n.id)) continue;
       for (let x = n; x && x.id !== this.zoom && !set.has(x.id); x = this.o.get(x.p)) set.add(x.id);
     }
     return set;
@@ -140,7 +172,7 @@ export class UI {
       top.time = now;
       return;
     }
-    this.undoStack.push({ nodes: this.o.snapshot(), focus: this.currentFocus(), kind, id, time: now });
+    this.undoStack.push({ nodes: this.o.snapshot(), focus: this.currentFocus(), zoom: this.zoom, kind, id, time: now });
     if (this.undoStack.length > 300) this.undoStack.shift();
     this.redoStack.length = 0;
   }
@@ -155,9 +187,10 @@ export class UI {
     const to = redo ? this.undoStack : this.redoStack;
     const rec = from.pop();
     if (!rec) return;
-    to.push({ nodes: this.o.snapshot(), focus: this.currentFocus(), kind: 'op', time: 0 });
+    to.push({ nodes: this.o.snapshot(), focus: this.currentFocus(), zoom: this.zoom, kind: 'op', time: 0 });
     this.o.restore(rec.nodes);
-    this.render();
+    if (rec.zoom && rec.zoom !== this.zoom && this.o.get(rec.zoom)) this.go(rec.zoom);
+    else this.render();
     if (rec.focus && this.o.get(rec.focus.id)) this.focus(rec.focus.id, rec.focus.off ?? 'end');
     this.onChange();
   }
@@ -237,8 +270,7 @@ export class UI {
     this.op(() => {
       const prev = this.o.prevSibling(id);
       if (!prev) return false;
-      const kids = this.o.children(prev.id);
-      this.o.move(id, prev.id, kids.length ? kids[kids.length - 1].id : null);
+      this.o.move(id, prev.id, lastChildId(this.o, prev.id));
       if (prev.c) this.o.update(prev.id, { c: false });
       return { id, off };
     });
@@ -296,6 +328,18 @@ export class UI {
     });
   }
 
+  // Color label 1-6; choosing the current color again (or 0) removes it.
+  setColor(id, c) {
+    const off = this.caretOf(id);
+    this.op(() => {
+      const cur = this.o.get(id).cl || 0;
+      const next = c === cur ? 0 : c;
+      if (next === cur) return false;
+      this.o.update(id, { cl: next });
+      return document.activeElement?.dataset?.id === id || off !== 'end' ? { id, off } : null;
+    });
+  }
+
   setCollapsed(id, c) {
     const n = this.o.get(id);
     if (!n || n.c === c || !this.o.hasChildren(id) || id === this.zoom) return;
@@ -308,8 +352,7 @@ export class UI {
 
   addItem() {
     this.op(() => {
-      const kids = this.o.children(this.zoom);
-      const c = this.o.insert(this.zoom, kids.length ? kids[kids.length - 1].id : null, {});
+      const c = this.o.insert(this.zoom, lastChildId(this.o, this.zoom), {});
       return { id: c.id, off: 0 };
     });
   }
@@ -328,14 +371,22 @@ export class UI {
       const base = Math.min(...items.map((x) => x.depth));
       const rest = n.t.slice(off);
       this.o.update(id, { t: n.t.slice(0, off) + items[0].t });
-      // stack[d] = last node at relative depth d
-      const stack = [this.o.get(id)];
-      let last = stack[0];
+      // Pasting into the title puts the remaining lines at the top of the
+      // list; otherwise they follow the item as siblings.
+      const isTitle = id === this.zoom;
+      const p0 = isTitle ? id : n.p;
+      let after0 = isTitle ? null : id;
+      const stack = isTitle ? [] : [n]; // stack[d] = last node at relative depth d
+      let last = n;
       for (const it of items.slice(1)) {
-        const d = Math.min(it.depth - base, stack.length);
+        const d = Math.min(Math.max(it.depth - base, 0), stack.length);
         let node;
-        if (d === 0) node = this.o.insert(stack[0].p, stack[0].id, { t: it.t });
-        else node = this.o.insert(stack[d - 1].id, lastChildId(this.o, stack[d - 1].id), { t: it.t });
+        if (d === 0) {
+          node = this.o.insert(p0, after0, { t: it.t });
+          after0 = node.id;
+        } else {
+          node = this.o.insert(stack[d - 1].id, lastChildId(this.o, stack[d - 1].id), { t: it.t });
+        }
         stack[d] = node;
         stack.length = d + 1;
         last = node;
@@ -345,17 +396,87 @@ export class UI {
     });
   }
 
-  zoomTo(id) {
-    const hash = id === ROOT ? '' : '#' + id;
+  // ---------- moving (drag and drop) ----------
+
+  // Move src to just before / after target among target's siblings, or into
+  // target as its first child. Returns false if not allowed.
+  placeItem(src, targetId, where) {
+    const t = this.o.get(targetId);
+    if (!t || src === targetId || this.o.isAncestor(src, targetId)) return false;
+    if (where === 'child') {
+      if (!this.o.move(src, targetId, null)) return false;
+      if (t.c) this.o.update(targetId, { c: false });
+      return true;
+    }
+    if (where === 'into') {
+      // Last child (used for dropping onto a document in the sidebar).
+      const kids = this.o.children(targetId).filter((k) => k.id !== src);
+      return this.o.move(src, targetId, kids.length ? kids[kids.length - 1].id : null);
+    }
+    if (where === 'after') return this.o.move(src, t.p, targetId);
+    const sibs = this.o.children(t.p).filter((s) => s.id !== src);
+    const i = sibs.indexOf(t);
+    return this.o.move(src, t.p, i > 0 ? sibs[i - 1].id : null);
+  }
+
+  drop(src, targetId, where) {
+    this.op(() => (this.placeItem(src, targetId, where) ? null : false));
+  }
+
+  // ---------- documents ----------
+
+  go(id) {
+    const hash = '#' + id;
     if (location.hash !== hash) history.pushState(null, '', location.pathname + location.search + hash);
     this.zoomFromHash();
   }
 
+  zoomTo(id) { this.go(id); }
+
   zoomFromHash() {
     const id = decodeURIComponent(location.hash.slice(1));
-    this.zoom = id && this.o.get(id) ? id : ROOT;
+    this.zoom = id && this.o.get(id) ? id : null;
     this.render();
     window.scrollTo(0, 0);
+  }
+
+  openDoc(id) {
+    if (this.query) this.setQuery('');
+    this.go(id);
+    document.body.classList.remove('side-open');
+  }
+
+  newDoc() {
+    this.checkpoint();
+    const d = this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: '' });
+    this.o.insert(d.id, null, {});
+    this.onChange();
+    this.openDoc(d.id);
+    this.focus(d.id, 0);
+  }
+
+  deleteDoc(id) {
+    const d = this.o.get(id);
+    const name = d.t || 'Untitled';
+    if (!confirm(`Delete the document "${name}" and everything in it?\n\n(Ctrl+Z / Undo brings it back.)`)) return;
+    const docs = this.o.children(ROOT);
+    const i = docs.indexOf(d);
+    const nb = docs[i + 1] || docs[i - 1];
+    const current = this.o.docOf(this.zoom)?.id === id;
+    this.checkpoint();
+    this.o.remove(id);
+    this.onChange();
+    if (current && nb) this.go(nb.id);
+    else this.render();
+  }
+
+  toggleSidebar() {
+    if (narrow()) {
+      document.body.classList.toggle('side-open');
+    } else {
+      const hidden = document.body.classList.toggle('side-hidden');
+      save('sideHidden', hidden || null);
+    }
   }
 
   setQuery(q) {
@@ -411,9 +532,11 @@ export class UI {
       const n = this.o.get(el.dataset.id);
       if (n && el.isConnected) el.innerHTML = format(n.t);
       setTimeout(() => {
-        if (!document.activeElement?.classList?.contains('text')) document.body.classList.remove('editing');
+        if (!document.activeElement?.classList?.contains('text')) {
+          document.body.classList.remove('editing');
+          this.palette.hidden = true;
+        }
       }, 0);
-      if (el.classList.contains('title')) this.renderCrumbs();
     });
 
     m.addEventListener('beforeinput', (e) => {
@@ -482,7 +605,7 @@ export class UI {
       if (e.key === 'Escape') this.setQuery('');
       if (e.key === 'Enter' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const first = this.visibleIds()[0];
+        const first = this.visibleIds()[1];
         if (first) this.focus(first, 'end');
       }
     });
@@ -496,16 +619,37 @@ export class UI {
 
     window.addEventListener('popstate', () => this.zoomFromHash());
 
+    // Sidebar
+    $('#side-btn').addEventListener('click', () => this.toggleSidebar());
+    $('#scrim').addEventListener('click', () => document.body.classList.remove('side-open'));
+    $('#new-doc').addEventListener('click', () => this.newDoc());
+    this.docs.addEventListener('click', (e) => {
+      if (this.drag.justDropped()) return;
+      const d = e.target.closest('.doc');
+      if (!d) return;
+      if (e.target.closest('.del')) this.deleteDoc(d.dataset.doc);
+      else this.openDoc(d.dataset.doc);
+    });
+
     // Touch toolbar. Preventing pointerdown/mousedown keeps focus (and the
     // soft keyboard) on the item being edited.
     const keep = (e) => { if (e.target.closest('button')) e.preventDefault(); };
-    this.toolbar.addEventListener('pointerdown', keep);
-    this.toolbar.addEventListener('mousedown', keep);
+    for (const el of [this.toolbar, this.palette]) {
+      el.addEventListener('pointerdown', keep);
+      el.addEventListener('mousedown', keep);
+    }
     this.toolbar.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-cmd]');
       if (!b) return;
       const id = document.activeElement?.dataset?.id || this.focusId;
       this.command(b.dataset.cmd, id);
+    });
+    this.palette.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-color]');
+      if (!b) return;
+      const id = document.activeElement?.dataset?.id || this.focusId;
+      this.palette.hidden = true;
+      if (id && this.o.get(id)) this.setColor(id, Number(b.dataset.color));
     });
   }
 
@@ -517,6 +661,7 @@ export class UI {
   command(cmd, id) {
     if (cmd === 'undo') return this.undo();
     if (cmd === 'redo') return this.undo(true);
+    if (cmd === 'palette') { this.palette.hidden = !this.palette.hidden; return; }
     if (!id || !this.o.get(id)) return;
     switch (cmd) {
       case 'indent': return this.indent(id);
@@ -538,8 +683,13 @@ export class UI {
       setCaret(el, off ?? t.length);
     }
     const id = el.dataset.id;
-    if (this.o.get(id) && this.o.get(id).t !== t) {
+    const n = this.o.get(id);
+    if (n && n.t !== t) {
       this.o.update(id, { t });
+      if (n.p === ROOT) {
+        const name = this.docs.querySelector(`[data-doc="${id}"] .name`);
+        if (name) name.textContent = t || 'Untitled';
+      }
       this.onChange();
     }
   }
@@ -560,11 +710,12 @@ export class UI {
     if ((mod || e.altKey) && e.shiftKey && key === 'ArrowDown') { handled(); return this.moveDown(id); }
     if (mod && key === 'ArrowUp') { handled(); return this.setCollapsed(id, true); }
     if (mod && key === 'ArrowDown') { handled(); return this.setCollapsed(id, false); }
+    if (e.altKey && !mod && !e.shiftKey && /^Digit[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(5))); }
     if (e.altKey && key === 'ArrowRight') { handled(); return this.zoomTo(id); }
     if (e.altKey && key === 'ArrowLeft') {
       handled();
       const z = this.o.get(this.zoom);
-      if (z.id !== ROOT) { const back = z.id; this.zoomTo(z.p); this.focus(back, 'end'); }
+      if (z.p !== ROOT) { const back = z.id; this.zoomTo(z.p); this.focus(back, 'end'); }
       return;
     }
     if (key === 'Escape') { handled(); el.blur(); return; }
@@ -586,6 +737,7 @@ export class UI {
 // ---------- helpers ----------
 
 const trim = (s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
+const colorClass = (n) => (n.cl ? ` cl-${n.cl}` : '');
 
 function lastChildId(o, pid) {
   const k = o.children(pid);

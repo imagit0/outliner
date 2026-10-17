@@ -10,9 +10,10 @@
 // is kept as a sibling marked "(conflict)".
 // Deleting a node loses to an edit of it on the other side.
 
-import { ROOT, FIELDS, newId } from './model.js';
+import { ROOT, FIELDS, newId, sameNode } from './model.js';
 
-const changed = (n, b, fields) => fields.some((f) => n[f] !== b[f]);
+const changed = (n, b, fields) => !sameNode(pick(n, fields), pick(b, fields));
+const pick = (n, fields) => Object.fromEntries(FIELDS.map((f) => [f, fields.includes(f) ? n[f] : null]));
 
 export function merge(base, local, remote) {
   base = base || {};
@@ -35,7 +36,7 @@ export function merge(base, local, remote) {
     }
     const n = { ...b, m: Math.max(l.m || 0, r.m || 0) };
     const localNewer = (l.m || 0) >= (r.m || 0);
-    for (const group of [['p', 'k'], ['t'], ['d'], ['c']]) {
+    for (const group of [['p', 'k'], ['t'], ['d'], ['c'], ['cl']]) {
       const lc = changed(l, b, group), rc = changed(r, b, group);
       const src = lc && rc ? (localNewer ? l : r) : lc ? l : rc ? r : b;
       for (const f of group) n[f] = src[f];

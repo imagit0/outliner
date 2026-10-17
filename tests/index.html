@@ -85,6 +85,33 @@ test('merge: done on one side, text on the other', () => {
   eq([m[s.b].t, m[s.b].d], ['B', true]);
 });
 
+test('merge: color on one side, text on the other', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.b, { cl: 3 });
+  R.update(s.b, { t: 'B' });
+  const m = merge(s.base, L.nodes, R.nodes);
+  eq([m[s.b].t, m[s.b].cl], ['B', 3]);
+});
+
+test('missing color equals no color', () => {
+  const s = setup();
+  const R = new Outline(clone(s.base));
+  R.nodes[s.a].cl = 0;
+  ok(sameNodes(s.base, R.nodes));
+  ok(sameNodes(merge(s.base, clone(s.base), R.nodes), s.base));
+});
+
+test('docOf finds the top-level document', () => {
+  const o = new Outline();
+  const d = o.insert(ROOT, null, { t: 'doc' });
+  const a = o.insert(d.id, null, { t: 'a' });
+  const b = o.insert(a.id, null, { t: 'b' });
+  eq(o.docOf(b.id).id, d.id);
+  eq(o.docOf(d.id).id, d.id);
+  eq(o.docOf(ROOT), null);
+});
+
 test('merge: delete vs untouched deletes', () => {
   const s = setup();
   const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));

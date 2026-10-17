@@ -12,7 +12,10 @@
 //   t   text
 //   d   done (bool)
 //   c   collapsed (bool)
+//   cl  color label 1-6 (0 or missing = none)
 //   m   last-modified time in ms (used to break merge ties)
+//
+// The root's children are documents (shown in the sidebar).
 
 export const ROOT = 'root';
 export const FORMAT = 'outliner/1';
@@ -61,8 +64,16 @@ export class Outline {
 
   static empty() {
     const o = new Outline();
-    o.insert(ROOT, null, {});
+    const doc = o.insert(ROOT, null, { t: 'My outline' });
+    o.insert(doc.id, null, {});
     return o;
+  }
+
+  // The document (child of root) that contains id.
+  docOf(id) {
+    let n = this.nodes[id];
+    while (n && n.p !== ROOT && n.p !== null) n = this.nodes[n.p];
+    return n && n.p === ROOT ? n : null;
   }
 
   toJSON() { return { format: FORMAT, nodes: this.nodes }; }
@@ -204,10 +215,13 @@ export function cmpNode(a, b) {
   return a.k < b.k ? -1 : a.k > b.k ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-export const FIELDS = ['p', 'k', 't', 'd', 'c'];
+export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl'];
+
+// Missing optional fields (older nodes have no cl) count as their default.
+const norm = (f, v) => (v === undefined && f === 'cl' ? 0 : v);
 
 export function sameNode(a, b) {
-  return FIELDS.every((f) => a[f] === b[f]);
+  return FIELDS.every((f) => norm(f, a[f]) === norm(f, b[f]));
 }
 
 export function sameNodes(a, b) {
