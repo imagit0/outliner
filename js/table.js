@@ -301,8 +301,10 @@ export const tableMethods = {
   // ---------- table toolbar ----------
 
   showTableTools(cellEl) {
-    this.toolsTable = cellEl.closest('table');
-    if (!this.toolsTable) return;
+    const table = cellEl.closest('table');
+    if (!table) return;
+    if (this.toolsTable && this.toolsTable !== table) this.unpinHeader();
+    this.toolsTable = table;
     this.tableTools.hidden = false;
     this.placeTableTools();
     if (!this.toolsTracking) {
@@ -328,6 +330,25 @@ export const tableMethods = {
     tools.style.visibility = r.bottom < headerBottom + h ? 'hidden' : '';
     tools.style.top = `${top}px`;
     tools.style.left = `${Math.max(r.left, 8)}px`;
+
+    // A header row stays pinned just below the toolbar (until the table's
+    // own bottom pushes it away). Shifting the cells keeps the table layout
+    // untouched; the cells' solid background hides the rows underneath.
+    if (t.classList.contains('hd') && t.rows.length > 1) {
+      const row = t.rows[0];
+      const rowH = row.getBoundingClientRect().height;
+      const want = top + h + 4 - r.top;
+      const offset = Math.max(0, Math.min(want, r.height - rowH - t.rows[t.rows.length - 1].getBoundingClientRect().height));
+      for (const td of row.cells) td.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
+      row.classList.toggle('pinned', offset > 0);
+    }
+  },
+
+  unpinHeader() {
+    const t = this.toolsTable;
+    if (!t || !t.rows.length) return;
+    for (const td of t.rows[0].cells) td.style.transform = '';
+    t.rows[0].classList.remove('pinned');
   },
 
   tableCommand(cmd, id) {

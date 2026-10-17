@@ -337,6 +337,8 @@ body.show-md .text:focus .link.img::before, body.show-md .text:focus .link.img::
 .tbl.nb td { border: 0; } /* no borders: colored cells touch */
 .tbl.hd tr:first-child td { background: var(--hover); border-bottom: 2px solid var(--muted); }
 .tbl.hd tr:first-child .text.cell { font-weight: 700; }
+/* Header row pinned below the table toolbar while scrolling (see placeTableTools). */
+.tbl tr.pinned td { position: relative; z-index: 6; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
 #outline.col-resize .tbl td, #outline.col-resize .tbl td *, body.col-resizing, body.col-resizing * { cursor: col-resize !important; }
 body.col-resizing { user-select: none; }
 .table-item > .row > .text:empty::before { content: attr(data-placeholder); color: var(--muted); }

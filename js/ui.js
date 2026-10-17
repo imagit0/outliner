@@ -854,7 +854,10 @@ export class UI {
           document.body.classList.remove('editing');
           this.palette.hidden = true;
         }
-        if (!a?.classList?.contains('cell')) this.tableTools.hidden = true;
+        if (!a?.classList?.contains('cell')) {
+          this.tableTools.hidden = true;
+          this.unpinHeader();
+        }
       }, 0);
     });
 
