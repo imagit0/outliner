@@ -301,15 +301,33 @@ export const tableMethods = {
   // ---------- table toolbar ----------
 
   showTableTools(cellEl) {
+    this.toolsTable = cellEl.closest('table');
+    if (!this.toolsTable) return;
+    this.tableTools.hidden = false;
+    this.placeTableTools();
+    if (!this.toolsTracking) {
+      // Keep it in place while the page scrolls or resizes.
+      this.toolsTracking = true;
+      const follow = () => { if (!this.tableTools.hidden) this.placeTableTools(); };
+      window.addEventListener('scroll', follow, { passive: true });
+      window.addEventListener('resize', follow);
+    }
+  },
+
+  // Just above the table's first row; once that has scrolled under the
+  // header, pinned right below the header. Hidden when the whole table is
+  // above the screen.
+  placeTableTools() {
     const tools = this.tableTools;
-    const tableEl = cellEl.closest('table');
-    if (!tableEl) return;
-    tools.hidden = false;
-    const r = tableEl.getBoundingClientRect();
+    const t = this.toolsTable;
+    if (!t || !t.isConnected) { tools.hidden = true; return; }
+    const r = t.getBoundingClientRect();
     const h = tools.offsetHeight || 34;
-    const top = Math.max(r.top - h - 4, 56); // stay below the header
-    tools.style.top = `${top + window.scrollY}px`;
-    tools.style.left = `${Math.max(r.left, 8) + window.scrollX}px`;
+    const headerBottom = document.querySelector('header').getBoundingClientRect().bottom;
+    const top = Math.max(r.top - h - 4, headerBottom + 4);
+    tools.style.visibility = r.bottom < headerBottom + h ? 'hidden' : '';
+    tools.style.top = `${top}px`;
+    tools.style.left = `${Math.max(r.left, 8)}px`;
   },
 
   tableCommand(cmd, id) {

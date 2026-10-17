@@ -342,7 +342,7 @@ body.col-resizing { user-select: none; }
 .table-item > .row > .text:empty::before { content: attr(data-placeholder); color: var(--muted); }
 
 #table-tools {
-  position: absolute; z-index: 15; display: flex; gap: 2px; padding: 3px;
+  position: fixed; z-index: 15; /* placed by placeTableTools() */ display: flex; gap: 2px; padding: 3px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
 }
 #table-tools[hidden] { display: none; }
