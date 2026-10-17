@@ -368,8 +368,11 @@ body.col-resizing { user-select: none; }
   background: var(--panel); border-top: 1px solid var(--line);
 }
 #toolbar button {
-  flex: 1; min-width: 34px; max-width: 56px; height: 44px; border: 0; border-radius: 8px; background: none; font-size: 20px; padding: 0;
+  flex: 1 1 0; min-width: 0; max-width: 56px; height: 44px; border: 0; border-radius: 8px; background: none; font-size: 20px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
 }
+#toolbar { gap: 0; padding-left: 2px; padding-right: 2px; }
+.tb-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #toolbar button:active { background: var(--hover); }
 #toolbar .aa { font-size: 16px; font-weight: 600; }
 #palette {
@@ -403,8 +406,13 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, .35); }
 dialog h2 { margin-top: 0; font-size: 1.2em; }
-dialog td { padding: 3px 12px 3px 0; vertical-align: top; }
-dialog td:first-child { white-space: nowrap; font-family: var(--mono); font-size: .9em; }
+#help { width: min(860px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); }
+.keys { width: 100%; border-collapse: collapse; }
+.keys th { text-align: left; padding: 14px 0 4px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.keys tr:first-child th { padding-top: 0; }
+.keys td { padding: 5px 0; vertical-align: top; border-bottom: 1px solid var(--line); }
+.keys td:last-child { padding-left: 24px; text-align: right; white-space: nowrap; font-family: var(--mono); font-size: .9em; }
+.keys td small { font-family: var(--font); color: var(--muted); }
 dialog code { font-family: var(--mono); background: var(--code-bg); padding: 0 3px; border-radius: 4px; }
 dialog button { padding: 6px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--hover); cursor: pointer; }
 #settings { width: min(420px, calc(100vw - 32px)); }

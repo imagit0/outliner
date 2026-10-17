@@ -59,14 +59,15 @@
   <main id="outline"></main>
 
   <div id="toolbar" role="toolbar" aria-label="Item actions">
+    <button type="button" tabindex="-1" data-cmd="zoom" aria-label="Zoom in"><svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2L21 21M10.5 7.5v6M7.5 10.5h6"/></svg></button>
     <button type="button" tabindex="-1" data-cmd="outdent" aria-label="Outdent">⇤</button>
     <button type="button" tabindex="-1" data-cmd="indent" aria-label="Indent">⇥</button>
+    <button type="button" tabindex="-1" data-cmd="done" aria-label="Complete">✓</button>
     <button type="button" tabindex="-1" data-cmd="up" aria-label="Move up">↑</button>
     <button type="button" tabindex="-1" data-cmd="down" aria-label="Move down">↓</button>
-    <button type="button" tabindex="-1" data-cmd="done" aria-label="Complete">✓</button>
     <button type="button" tabindex="-1" data-cmd="palette" aria-label="Formatting" class="aa">Aa</button>
-    <button type="button" tabindex="-1" data-cmd="collapse" aria-label="Collapse or expand">▸</button>
-    <button type="button" tabindex="-1" data-cmd="zoom" aria-label="Zoom in">⤢</button>
+    <button type="button" tabindex="-1" data-cmd="move" aria-label="Move to another document"><svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v4"/><path d="M14 3.5v4h4"/><path d="M6 3.5v17h6"/><path d="M14 17h7M18 14l3 3-3 3"/></svg></button>
+    <button type="button" tabindex="-1" data-cmd="delete" aria-label="Delete item"><svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6.5 6.5l1 14h9l1-14M10 10.5v6M14 10.5v6"/></svg></button>
     <button type="button" tabindex="-1" data-cmd="undo" aria-label="Undo">↶</button>
     <button type="button" tabindex="-1" data-cmd="redo" aria-label="Redo">↷</button>
   </div>
@@ -94,8 +95,6 @@
       <button type="button" tabindex="-1" data-fmt="highlight" class="fb" aria-label="Highlight"><mark>H</mark></button>
       <button type="button" tabindex="-1" data-fmt="link" class="fb" aria-label="Link">🔗</button>
       <button type="button" tabindex="-1" data-fmt="table" class="fb" aria-label="Insert table">▦</button>
-      <button type="button" tabindex="-1" data-fmt="move" class="fb" aria-label="Move to document">⇢</button>
-      <button type="button" tabindex="-1" data-fmt="delete" class="fb" aria-label="Delete item">🗑</button>
     </div>
   </div>
 
@@ -124,43 +123,50 @@
 
   <dialog id="help">
     <h2>Keyboard shortcuts</h2>
-    <table>
-      <tr><td>Enter</td><td>New item (splits at the cursor)</td></tr>
-      <tr><td>Tab / Shift+Tab</td><td>Indent / outdent</td></tr>
-      <tr><td>Ctrl+Shift+↑ / ↓</td><td>Move item up / down</td></tr>
-      <tr><td>Ctrl+↑ / ↓</td><td>Collapse / expand</td></tr>
-      <tr><td>Ctrl+Enter</td><td>Mark complete</td></tr>
-      <tr><td>Ctrl+1 … Ctrl+6</td><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td></tr>
-      <tr><td>Ctrl+0</td><td>Remove color</td></tr>
-      <tr><td>Ctrl+Alt+1 … 3</td><td>Heading 1 / 2 / 3 (again to remove; Ctrl+Alt+0 = normal)</td></tr>
-      <tr><td>Ctrl+B / Ctrl+I</td><td>Bold / italic (wraps the selection)</td></tr>
-      <tr><td>Ctrl+H / Ctrl+T</td><td>Highlight / strikethrough</td></tr>
-      <tr><td>Ctrl+K</td><td>Insert link (selected text becomes the link text)</td></tr>
-      <tr><td>Ctrl+.</td><td>Expand / collapse</td></tr>
-      <tr><td>Ctrl+Shift+Backspace</td><td>Delete item (with everything under it)</td></tr>
-      <tr><td>Ctrl+Shift+M</td><td>Move item to another document</td></tr>
-      <tr><td>Ctrl+,</td><td>Settings</td></tr>
-      <tr><td>Ctrl+M</td><td>Show / hide formatting characters (**, __, [](…)) while editing</td></tr>
-      <tr><td>Ctrl+Alt+T</td><td>Insert table</td></tr>
-      <tr><td colspan="2"><b>In a table</b></td></tr>
-      <tr><td>Tab / Shift+Tab</td><td>Next / previous cell (Tab in the last cell adds a row)</td></tr>
-      <tr><td>Enter</td><td>Cell below (adds a row at the bottom)</td></tr>
-      <tr><td>Ctrl+Alt+↑ ↓ ← →</td><td>Insert row above / below, column left / right</td></tr>
-      <tr><td>Ctrl+Shift+Backspace</td><td>Delete row</td></tr>
-      <tr><td>Ctrl+Shift+0 … 6<br>or Ctrl+Alt+0 … 6</td><td>Color the whole row (0 clears it)</td></tr>
-      <tr><td>Drag a column edge</td><td>Set the column's width (double-click the edge for automatic width)</td></tr>
-      <tr><td>Drag a bullet</td><td>Move the item (long-press on touch). Drop it on a document in the sidebar to move it there.</td></tr>
-      <tr><td>Drag in sidebar</td><td>Reorder documents and folders, or drop them into a folder</td></tr>
-      <tr><td>Alt+→ / Alt+←</td><td>Zoom in / out (or click a bullet)</td></tr>
-      <tr><td>Backspace at start</td><td>Join with the item above (deletes if empty)</td></tr>
-      <tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo</td></tr>
-      <tr><td>Ctrl+F</td><td>Search</td></tr>
-      <tr><td>Ctrl+S</td><td>Sync now (or tap the sync icon)</td></tr>
-      <tr><td>Esc</td><td>Stop editing</td></tr>
+    <table class="keys">
+      <tr><th colspan="2">Editing</th></tr>
+      <tr><td>New item (splits at the cursor)</td><td>Enter</td></tr>
+      <tr><td>Indent / outdent</td><td>Tab / Shift+Tab</td></tr>
+      <tr><td>Join with the item above (deletes it if empty)</td><td>Backspace at start</td></tr>
+      <tr><td>Delete item (with everything under it)</td><td>Ctrl+Shift+Backspace</td></tr>
+      <tr><td>Mark complete</td><td>Ctrl+Enter</td></tr>
+      <tr><td>Undo / redo</td><td>Ctrl+Z / Ctrl+Y</td></tr>
+      <tr><td>Stop editing</td><td>Esc</td></tr>
+
+      <tr><th colspan="2">Formatting</th></tr>
+      <tr><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td><td>Ctrl+1 … Ctrl+6</td></tr>
+      <tr><td>Remove color</td><td>Ctrl+0</td></tr>
+      <tr><td>Heading 1 / 2 / 3 (again to remove)</td><td>Ctrl+Alt+1 … 3</td></tr>
+      <tr><td>Normal text</td><td>Ctrl+Alt+0</td></tr>
+      <tr><td>Bold / italic (wraps the selection; they stack)</td><td>Ctrl+B / Ctrl+I</td></tr>
+      <tr><td>Highlight / strikethrough</td><td>Ctrl+H / Ctrl+T</td></tr>
+      <tr><td>Insert link (selected text becomes the link text)</td><td>Ctrl+K</td></tr>
+      <tr><td>Show / hide formatting characters while editing</td><td>Ctrl+M</td></tr>
+
+      <tr><th colspan="2">Organizing</th></tr>
+      <tr><td>Move item up / down</td><td>Ctrl+Shift+↑ / ↓</td></tr>
+      <tr><td>Collapse / expand</td><td>Ctrl+↑ / ↓ or Ctrl+.</td></tr>
+      <tr><td>Zoom in / out (or click a bullet)</td><td>Alt+→ / Alt+←</td></tr>
+      <tr><td>Move item to another document (goes to the top)</td><td>Ctrl+Shift+M</td></tr>
+      <tr><td>Move an item (drop it on a sidebar document to move it there)</td><td>Drag its bullet<br><small>long-press on touch</small></td></tr>
+      <tr><td>Reorder documents and folders, or put them in a folder</td><td>Drag in the sidebar</td></tr>
+
+      <tr><th colspan="2">Tables</th></tr>
+      <tr><td>Insert table</td><td>Ctrl+Alt+T</td></tr>
+      <tr><td>Next / previous cell (Tab in the last cell adds a row)</td><td>Tab / Shift+Tab</td></tr>
+      <tr><td>Cell below (adds a row at the bottom)</td><td>Enter</td></tr>
+      <tr><td>Insert row above / below, column left / right</td><td>Ctrl+Alt+↑ ↓ ← →</td></tr>
+      <tr><td>Delete row</td><td>Ctrl+Shift+Backspace</td></tr>
+      <tr><td>Color the whole row (0 clears it)</td><td>Ctrl+Shift+0 … 6<br>or Ctrl+Alt+0 … 6</td></tr>
+      <tr><td>Set a column's width (double-click the edge for automatic)</td><td>Drag a column edge</td></tr>
+
+      <tr><th colspan="2">App</th></tr>
+      <tr><td>Search (the <b>All</b> button searches every document)</td><td>Ctrl+F</td></tr>
+      <tr><td>Sync now (or tap the sync icon)</td><td>Ctrl+S</td></tr>
+      <tr><td>Settings</td><td>Ctrl+,</td></tr>
     </table>
     <p>Formatting: <code>**bold**</code>, <code>__italic__</code>, <code>~~strike~~</code>, <code>==highlight==</code>, <code>`code`</code>, <code>[text](https://…)</code> links and plain web addresses. Put <code>!</code> in front of an image link — <code>![caption](https://…/pic.jpg)</code> or <code>!https://…/pic.jpg</code> — to preview the image on hover (tap on a phone).</p>
-    <p>On a phone, the <b>Aa</b> button has colors, headings, text styles, links, tables, move and delete.</p>
-    <p>Search looks in the current document; press <b>All</b> next to the search box to search every document.</p>
+    <p>On a phone, the <b>Aa</b> button on the bottom toolbar has colors, headings, text styles, links and tables.</p>
     <button id="help-close" type="button">Close</button>
   </dialog>
 

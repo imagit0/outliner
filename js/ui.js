@@ -1050,6 +1050,8 @@ export class UI {
       case 'down': return this.moveDown(id);
       case 'done': return this.toggleDone(id);
       case 'zoom': return this.o.isCell(id) ? undefined : this.zoomTo(id);
+      case 'move': return this.openMove(id);
+      case 'delete': return this.deleteItem(id);
       case 'collapse': {
         const target = this.o.isCell(id) ? this.cellPos(id).table.id : id;
         return this.setCollapsed(target, !this.o.get(target).c);

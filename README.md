@@ -20,7 +20,7 @@ No build step: plain HTML/CSS/ES modules.
 - An empty document starts with a blank first line with the cursor in it
 - Headings, 3 levels (Ctrl+Alt+1–3, Ctrl+Alt+0 for normal text)
 - Settings (⋮ → Settings, or Ctrl+,): theme (dark by default, light, or same as the system), font (Arial by default), text size (17 by default), and whether formatting characters (`**`, `__`, `[](…)`) appear while you edit a line (off by default; Ctrl+M toggles it). These are saved per device.
-- On phones, the **Aa** toolbar button has colors, headings, bold, italic and links.
+- Phone toolbar: zoom, outdent, indent, complete, move up, move down, **Aa** (colors, headings, text styles, links, tables), move to document, delete, undo, redo.
 - Multi-line paste becomes separate items (indentation is kept)
 - Undo/redo, export/import a JSON backup, export as indented text
 - A touch toolbar on phones (indent, outdent, move, complete, collapse, zoom, undo, redo)
