@@ -337,8 +337,14 @@ body.show-md .text:focus .link.img::before, body.show-md .text:focus .link.img::
 .tbl.nb td { border: 0; } /* no borders: colored cells touch */
 .tbl.hd tr:first-child td { background: var(--hover); border-bottom: 2px solid var(--muted); }
 .tbl.hd tr:first-child .text.cell { font-weight: 700; }
-/* Header row pinned below the table toolbar while scrolling (see placeTableTools). */
-.tbl tr.pinned td { position: relative; z-index: 6; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+/* Copy of the header row pinned below the table toolbar while scrolling
+   (see placeTableTools). Solid background from the search bar down. */
+#table-head {
+  position: fixed; z-index: 14; overflow: hidden; font-size: var(--fs);
+  background: var(--bg); box-shadow: 0 3px 6px -2px rgba(0, 0, 0, .4);
+}
+#table-head[hidden] { display: none; }
+#table-head .tbl { margin: 0; }
 #outline.col-resize .tbl td, #outline.col-resize .tbl td *, body.col-resizing, body.col-resizing * { cursor: col-resize !important; }
 body.col-resizing { user-select: none; }
 .table-item > .row > .text:empty::before { content: attr(data-placeholder); color: var(--muted); }

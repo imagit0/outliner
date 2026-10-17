@@ -37,6 +37,7 @@ export class UI {
     this.docs = $('#docs');
     this.searchAllBtn = $('#search-all');
     this.tableTools = $('#table-tools');
+    this.tableHead = $('#table-head');
     this.imgPop = $('#img-pop');
     this.moveDlg = $('#move');
 

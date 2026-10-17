@@ -303,17 +303,48 @@ export const tableMethods = {
   showTableTools(cellEl) {
     const table = cellEl.closest('table');
     if (!table) return;
-    if (this.toolsTable && this.toolsTable !== table) this.unpinHeader();
     this.toolsTable = table;
     this.tableTools.hidden = false;
+    this.buildPinnedHeader();
     this.placeTableTools();
     if (!this.toolsTracking) {
       // Keep it in place while the page scrolls or resizes.
       this.toolsTracking = true;
       const follow = () => { if (!this.tableTools.hidden) this.placeTableTools(); };
-      window.addEventListener('scroll', follow, { passive: true });
-      window.addEventListener('resize', follow);
+      // Capture: also hears the table's own sideways scroll, not just the page's.
+      window.addEventListener('scroll', follow, { passive: true, capture: true });
+      window.addEventListener('resize', () => {
+        if (this.tableTools.hidden) return;
+        this.buildPinnedHeader();
+        this.placeTableTools();
+      });
+      this.tableHead.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the cursor where it is
     }
+  },
+
+  // A fixed copy of the table's header row (same column widths), shown below
+  // the toolbar once the real header row has scrolled under it. Being
+  // position:fixed like the toolbar, it doesn't jitter while scrolling.
+  buildPinnedHeader() {
+    const t = this.toolsTable;
+    const pin = this.tableHead;
+    pin.innerHTML = '';
+    pin.hidden = true;
+    if (!t || !t.classList.contains('hd') || t.rows.length < 2) return;
+    const row = t.rows[0];
+    const copy = document.createElement('table');
+    copy.className = t.className;
+    copy.style.tableLayout = 'fixed';
+    copy.style.width = `${t.getBoundingClientRect().width}px`;
+    const tr = row.cloneNode(true);
+    [...row.cells].forEach((td, i) => { tr.cells[i].style.width = `${td.getBoundingClientRect().width}px`; });
+    for (const el of tr.querySelectorAll('[contenteditable]')) {
+      el.removeAttribute('contenteditable');
+      el.removeAttribute('data-id');
+      el.removeAttribute('data-new');
+    }
+    copy.createTBody().append(tr);
+    pin.append(copy);
   },
 
   // Just above the table's first row; once that has scrolled under the
@@ -331,24 +362,31 @@ export const tableMethods = {
     tools.style.top = `${top}px`;
     tools.style.left = `${Math.max(r.left, 8)}px`;
 
-    // A header row stays pinned just below the toolbar (until the table's
-    // own bottom pushes it away). Shifting the cells keeps the table layout
-    // untouched; the cells' solid background hides the rows underneath.
-    if (t.classList.contains('hd') && t.rows.length > 1) {
-      const row = t.rows[0];
-      const rowH = row.getBoundingClientRect().height;
-      const want = top + h + 4 - r.top;
-      const offset = Math.max(0, Math.min(want, r.height - rowH - t.rows[t.rows.length - 1].getBoundingClientRect().height));
-      for (const td of row.cells) td.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
-      row.classList.toggle('pinned', offset > 0);
+    // Pinned header copy: shown once the real header row has scrolled up to
+    // the toolbar, until the table's last row reaches it. Its solid
+    // background runs from the search bar down, filling the gap around the
+    // toolbar so no text shows through.
+    const pin = this.tableHead;
+    const copy = pin.firstChild;
+    if (!copy) return;
+    const slot = top + h + 4; // where the header copy's top goes
+    const copyH = copy.getBoundingClientRect().height;
+    const lastRow = t.rows[t.rows.length - 1].getBoundingClientRect();
+    if (r.top < slot && lastRow.top > slot + copyH) {
+      const wrap = t.closest('.table-wrap').getBoundingClientRect();
+      pin.hidden = false;
+      pin.style.top = `${headerBottom}px`;
+      pin.style.left = `${wrap.left}px`;
+      pin.style.width = `${wrap.width}px`;
+      pin.style.paddingTop = `${slot - headerBottom}px`;
+      copy.style.marginLeft = `${r.left - wrap.left}px`;
+    } else {
+      pin.hidden = true;
     }
   },
 
   unpinHeader() {
-    const t = this.toolsTable;
-    if (!t || !t.rows.length) return;
-    for (const td of t.rows[0].cells) td.style.transform = '';
-    t.rows[0].classList.remove('pinned');
+    this.tableHead.hidden = true;
   },
 
   tableCommand(cmd, id) {
