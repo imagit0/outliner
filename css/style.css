@@ -165,11 +165,11 @@ header {
   .entry .acts { display: flex; position: static; transform: none; background: none; opacity: .6; }
 }
 body.dragging .entry .acts { display: none; }
+.side-top { display: flex; gap: 4px; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .side-add {
-  display: block; width: 100%; margin-top: 2px; padding: 6px 10px; text-align: left;
-  border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer;
+  flex: 1; padding: 6px 8px; text-align: center; font-size: 14px;
+  border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--muted); cursor: pointer;
 }
-#new-doc { margin-top: 8px; }
 .side-add:hover { background: var(--hover); color: var(--fg); }
 
 #search-all {
@@ -280,8 +280,24 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .text code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); border-radius: 4px; padding: 0 3px; }
 .link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .text:focus .link { cursor: text; }
-.link.img::before { content: "🖼\FE0E"; margin-right: 3px; text-decoration: none; display: inline-block; }
-.link.img:empty::after { content: "image"; }
+/* Image links: a boxed chip with a mountain-and-sun icon, like Dynalist. */
+.link.img {
+  display: inline-flex; align-items: center; gap: 5px; padding: 0 7px; margin: 0 1px;
+  border: 1px solid var(--line); border-radius: 5px; color: var(--fg); text-decoration: none;
+  line-height: 1.45; vertical-align: baseline;
+}
+.link.img:hover { border-color: var(--muted); background: var(--hover); }
+.link.img::before {
+  content: ""; flex: none; width: 1.05em; height: 1.05em; background: var(--muted);
+  -webkit-mask: var(--img-icon) center / contain no-repeat; mask: var(--img-icon) center / contain no-repeat;
+}
+.link.img:empty::after, .text:not(:focus) .link.img.bare::after { content: "Image"; }
+/* While editing, show the raw text without the chip so the cursor behaves. */
+.text:focus .link.img { display: inline; padding: 0; margin: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; }
+.text:focus .link.img::before, .text:focus .link.img::after { display: none; }
+:root {
+  --img-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M2 20l7-9.5 4.5 5.5 3-3.5L22 20z'/%3E%3Ccircle cx='16.5' cy='6' r='2.5'/%3E%3C/svg%3E");
+}
 .text mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
 .text s { color: var(--muted); }
 
@@ -305,6 +321,10 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
   white-space: pre-wrap; overflow-wrap: break-word;
 }
 .text.cell:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.tbl.hd tr:first-child td { background: var(--hover); border-bottom: 2px solid var(--muted); }
+.tbl.hd tr:first-child .text.cell { font-weight: 700; }
+#outline.col-resize .tbl td, #outline.col-resize .tbl td *, body.col-resizing, body.col-resizing * { cursor: col-resize !important; }
+body.col-resizing { user-select: none; }
 .table-item > .row > .text:empty::before { content: attr(data-placeholder); color: var(--muted); }
 
 #table-tools {

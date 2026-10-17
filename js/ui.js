@@ -529,7 +529,7 @@ export class UI {
     const nb = els.slice(i).find((el) => !mine(el) && el.dataset.id) || els.slice(0, i).reverse().find((el) => el.dataset.id);
     const name = this.o.get(docId).t || 'Untitled';
     this.op(() => {
-      if (!this.placeItem(id, docId, 'into')) return false;
+      if (!this.placeItem(id, docId, 'child')) return false; // top of the document
       return nb && this.o.get(nb.dataset.id) && this.textEl(nb.dataset.id) !== null ? { id: nb.dataset.id, off: 'end' } : null;
     });
     this.toast(`Moved to “${name}”`);
@@ -772,6 +772,7 @@ export class UI {
 
   bind() {
     const m = this.main;
+    this.bindTableResize();
 
     m.addEventListener('click', (e) => {
       const t = e.target;
@@ -1076,6 +1077,10 @@ export class UI {
     // Table cells
     if (this.o.isCell(id)) {
       if (key === 'Tab') { handled(); return this.cellStep(id, e.shiftKey ? -1 : 1); }
+      if (mod && e.shiftKey && !e.altKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) {
+        handled();
+        return this.setRowColor(id, Number(e.code.slice(-1)));
+      }
       if (mod && e.altKey && !e.shiftKey && key.startsWith('Arrow')) {
         handled();
         if (key === 'ArrowUp') return this.addRow(id, false);
@@ -1107,7 +1112,9 @@ export class UI {
     if ((mod || e.altKey) && e.shiftKey && key === 'ArrowDown') { handled(); return this.moveDown(id); }
     if (mod && key === 'ArrowUp') { handled(); return this.setCollapsed(id, true); }
     if (mod && key === 'ArrowDown') { handled(); return this.setCollapsed(id, false); }
-    if (mod && !e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
+    if (mod && !e.altKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyH') { handled(); return this.wrap(id, '=='); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyT') { handled(); return this.wrap(id, '~~'); }
     if (mod && e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-3]$/.test(e.code)) { handled(); return this.setHeading(id, Number(e.code.slice(-1))); }
     if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyB') { handled(); return this.wrap(id, '**'); }
     if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyI') { handled(); return this.wrap(id, '__'); }

@@ -5,6 +5,7 @@ import { UI } from './ui.js';
 import { Sync } from './sync.js';
 import * as dropbox from './dropbox.js';
 import { load, save, requestPersistence } from './store.js';
+import { exportOPML, parseOPML, insertItems } from './opml.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -147,6 +148,13 @@ menu.addEventListener('click', async (e) => {
       return download(`outline-${new Date().toISOString().slice(0, 10)}.txt`, toText(ui.zoom), 'text/plain');
     case 'm-import':
       return $('#import-file').click();
+    case 'm-export-opml': {
+      const doc = outline.docOf(ui.zoom);
+      const name = (doc.t || 'Untitled').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80);
+      return download(`${name}.opml`, exportOPML(outline, doc.id), 'text/x-opml');
+    }
+    case 'm-import-opml':
+      return $('#import-opml').click();
     case 'm-help':
       return $('#help').showModal();
     case 'm-settings':
@@ -169,6 +177,25 @@ $('#import-file').addEventListener('change', async (e) => {
     ui.onChange();
   } catch (err) {
     alert(`Import failed: ${err.message}`);
+  }
+});
+
+$('#import-opml').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const { title, items } = parseOPML(await f.text());
+    ui.checkpoint();
+    const cur = outline.docOf(ui.zoom);
+    const name = title || f.name.replace(/\.(opml|xml)$/i, '');
+    const doc = cur ? outline.insert(cur.p, cur.id, { t: name }) : outline.insert(ROOT, null, { t: name });
+    const count = insertItems(outline, doc.id, items);
+    ui.onChange();
+    ui.openDoc(doc.id);
+    ui.toast(`Imported ${count} item${count === 1 ? '' : 's'} into “${name}”`);
+  } catch (err) {
+    alert(`OPML import failed: ${err.message}`);
   }
 });
 

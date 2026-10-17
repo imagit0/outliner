@@ -8,6 +8,7 @@
 import { keyBetween, Outline, ROOT, sameNodes } from '../js/model.js';
 import { merge } from '../js/merge.js';
 import { format } from '../js/format.js';
+import { exportOPML, parseOPML, insertItems } from '../js/opml.js';
 
 const out = document.getElementById('out');
 let pass = 0, fail = 0;
@@ -165,6 +166,40 @@ test('tables: row / cell detection and merge of tb', () => {
   const m = merge(s.base, L.nodes, R.nodes);
   eq([m[s.c].tb, m[s.c].t], [true, 'Table C']);
 });
+
+test('OPML round trip keeps tables, colors, headings, done', () => {
+  const o = new Outline();
+  const d = o.insert(ROOT, null, { t: 'Doc "one" & <two>' });
+  const a = o.insert(d.id, null, { t: 'alpha', cl: 3, h: 2 });
+  o.insert(a.id, null, { t: 'child', d: true });
+  const t = o.insert(d.id, a.id, { t: 'My table', tb: true, hd: true, cw: '120,,80' });
+  for (const row of [['h1', 'h2', 'h3'], ['x', '', 'z']]) {
+    const r = o.insert(t.id, lastId(o, t.id), {});
+    for (const v of row) o.insert(r.id, lastId(o, r.id), { t: v });
+  }
+  const xml = exportOPML(o, d.id);
+  const { title, items } = parseOPML(xml);
+  eq(title, 'Doc "one" & <two>');
+  const o2 = new Outline();
+  const d2 = o2.insert(ROOT, null, { t: title });
+  eq(insertItems(o2, d2.id, items), 11); // alpha, child, table, 2 rows, 6 cells
+  const [a2, t2] = o2.children(d2.id);
+  eq([a2.t, a2.cl, a2.h], ['alpha', 3, 2]);
+  eq(o2.children(a2.id)[0].d, true);
+  eq([t2.t, t2.tb, t2.hd, t2.cw], ['My table', true, true, '120,,80']);
+  eq(o2.children(t2.id).map((r) => o2.children(r.id).map((c) => c.t).join('|')), ['h1|h2|h3', 'x||z']);
+  ok(o2.isCell(o2.children(o2.children(t2.id)[0].id)[0].id));
+});
+
+test('OPML import of Dynalist-style notes and colors', () => {
+  const xml = `<?xml version="1.0"?><opml version="2.0"><head><title>DL</title></head><body>
+    <outline text="task" complete="true" colorLabel="5" _note="line one&#10;line two"><outline text="sub"/></outline></body></opml>`;
+  const { items } = parseOPML(xml);
+  eq(items[0].fields, { t: 'task', d: true, cl: 5 });
+  eq(items[0].children.map((c) => c.fields.t), ['line one', 'line two', 'sub']);
+});
+
+function lastId(o, pid) { const k = o.children(pid); return k.length ? k[k.length - 1].id : null; }
 
 test('merge: delete vs untouched deletes', () => {
   const s = setup();

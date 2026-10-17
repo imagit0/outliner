@@ -21,7 +21,10 @@ export const tableMethods = {
   renderTable(t) {
     const rows = this.o.children(t.id);
     const cols = Math.max(1, ...rows.map((r) => this.o.children(r.id).length));
-    let html = `<div class="table-wrap"><table class="tbl" data-table="${t.id}">`;
+    const widths = colWidths(t);
+    let html = `<div class="table-wrap"><table class="tbl${t.hd ? ' hd' : ''}" data-table="${t.id}"><colgroup>`;
+    for (let i = 0; i < cols; i++) html += widths[i] ? `<col style="width:${widths[i]}px">` : `<col>`;
+    html += `</colgroup>`;
     for (const r of rows) {
       html += `<tr data-row="${r.id}">`;
       const cells = this.o.children(r.id);
@@ -145,8 +148,13 @@ export const tableMethods = {
   },
 
   addCol(id, right) {
-    const { rows, r, c } = this.cellPos(id);
+    const { table, rows, r, c } = this.cellPos(id);
     this.op(() => {
+      const w = colWidths(table);
+      if (w.some(Boolean)) {
+        w.splice(right ? c + 1 : c, 0, 0);
+        this.o.update(table.id, { cw: w.map((x) => x || '').join(',') });
+      }
       let target = null;
       rows.forEach((row, i) => {
         const cells = this.o.children(row.id);
@@ -176,6 +184,11 @@ export const tableMethods = {
     const { table, rows, r, c, cols } = this.cellPos(id);
     if (cols === 1) return this.deleteTable(table.id);
     this.op(() => {
+      const w = colWidths(table);
+      if (w.some(Boolean)) {
+        w.splice(c, 1);
+        this.o.update(table.id, { cw: w.some(Boolean) ? w.map((x) => x || '').join(',') : '' });
+      }
       for (const row of rows) {
         const cell = this.o.children(row.id)[c];
         if (cell) this.o.remove(cell.id);
@@ -196,6 +209,90 @@ export const tableMethods = {
     this.op(() => {
       this.o.remove(tableId);
       return prev && this.o.get(prev) ? { id: prev, off: 'end' } : null;
+    });
+  },
+
+  // Ctrl+Shift+0..6: color every cell in the row (same color again clears).
+  setRowColor(id, color) {
+    const { rows, r } = this.cellPos(id);
+    const off = this.caretOf(id);
+    this.op(() => {
+      const cells = this.o.children(rows[r].id);
+      const next = cells.length && cells.every((x) => (x.cl || 0) === color) ? 0 : color;
+      for (const x of cells) if ((x.cl || 0) !== next) this.o.update(x.id, { cl: next });
+      return { id, off };
+    });
+  },
+
+  toggleHeader(id) {
+    const { table } = this.cellPos(id);
+    const off = this.caretOf(id);
+    this.op(() => {
+      this.o.update(table.id, { hd: !table.hd });
+      return { id, off };
+    });
+  },
+
+  // ---------- column widths (drag a column's right edge) ----------
+
+  bindTableResize() {
+    const near = (e) => {
+      const td = e.target.closest?.('#outline .tbl td');
+      if (!td) return null;
+      const d = td.getBoundingClientRect().right - e.clientX;
+      const tol = e.pointerType === 'mouse' ? 5 : 12;
+      return d >= -3 && d <= tol ? td : null;
+    };
+    this.main.addEventListener('pointermove', (e) => {
+      if (!this.colDrag) this.main.classList.toggle('col-resize', !!near(e));
+    });
+    this.main.addEventListener('pointerdown', (e) => {
+      const td = near(e);
+      if (!td || e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const table = td.closest('table');
+      this.colDrag = {
+        tableId: table.dataset.table,
+        ci: td.cellIndex,
+        col: table.querySelectorAll('col')[td.cellIndex],
+        x0: e.clientX,
+        w0: td.getBoundingClientRect().width,
+        w: null,
+      };
+      document.body.classList.add('col-resizing');
+    }, true);
+    window.addEventListener('pointermove', (e) => {
+      const d = this.colDrag;
+      if (!d) return;
+      d.w = Math.max(40, Math.round(d.w0 + e.clientX - d.x0));
+      d.col.style.width = `${d.w}px`;
+    });
+    window.addEventListener('pointerup', () => {
+      const d = this.colDrag;
+      if (!d) return;
+      this.colDrag = null;
+      document.body.classList.remove('col-resizing');
+      if (d.w !== null) this.setColWidth(d.tableId, d.ci, d.w);
+    });
+    this.main.addEventListener('dblclick', (e) => {
+      const td = near(e);
+      if (!td) return;
+      e.preventDefault();
+      this.setColWidth(td.closest('table').dataset.table, td.cellIndex, 0);
+    });
+  },
+
+  setColWidth(tableId, ci, w) {
+    const t = this.o.get(tableId);
+    const widths = colWidths(t);
+    while (widths.length <= ci) widths.push(0);
+    widths[ci] = w;
+    const cw = widths.some(Boolean) ? widths.map((x) => x || '').join(',') : '';
+    if (cw === (t.cw || '')) return this.render();
+    this.op(() => {
+      this.o.update(tableId, { cw });
+      return null;
     });
   },
 
@@ -223,9 +320,15 @@ export const tableMethods = {
       case 'del-row': return this.delRow(id);
       case 'del-col': return this.delCol(id);
       case 'del-table': return this.deleteTable(this.cellPos(id).table.id);
+      case 'header': return this.toggleHeader(id);
     }
   },
 };
+
+// Column widths of a table node as numbers (0 = automatic).
+function colWidths(t) {
+  return (t.cw || '').split(',').map((x) => parseInt(x, 10) || 0);
+}
 
 function setCaretEnd(el, off) {
   const sel = getSelection();

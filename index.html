@@ -29,9 +29,11 @@
   </header>
 
   <aside id="sidebar" aria-label="Documents">
+    <div class="side-top">
+      <button id="new-doc" class="side-add" type="button" title="New document next to the current one">+ Document</button>
+      <button id="new-folder" class="side-add" type="button" title="New folder">+ Folder</button>
+    </div>
     <div id="docs"></div>
-    <button id="new-doc" class="side-add" type="button">+ New document</button>
-    <button id="new-folder" class="side-add" type="button">+ New folder</button>
   </aside>
   <div id="scrim"></div>
 
@@ -43,13 +45,16 @@
     <hr>
     <button id="m-export" type="button">Export backup (.json)</button>
     <button id="m-export-txt" type="button">Export as text</button>
+    <button id="m-export-opml" type="button">Export document as OPML</button>
     <button id="m-import" type="button">Import backup…</button>
+    <button id="m-import-opml" type="button">Import OPML as new document…</button>
     <hr>
     <button id="m-settings" type="button">Settings…</button>
     <button id="m-help" type="button">Keyboard shortcuts</button>
     <button id="m-disconnect" type="button">Disconnect Dropbox</button>
   </div>
   <input id="import-file" type="file" accept=".json,application/json" hidden>
+  <input id="import-opml" type="file" accept=".opml,.xml,text/xml,text/x-opml" hidden>
 
   <main id="outline"></main>
 
@@ -101,6 +106,7 @@
     <button type="button" tabindex="-1" data-tcmd="col-right" title="Insert column right (Ctrl+Alt+→)">+ Col →</button>
     <button type="button" tabindex="-1" data-tcmd="del-row" title="Delete row (Ctrl+Shift+Backspace)">− Row</button>
     <button type="button" tabindex="-1" data-tcmd="del-col" title="Delete column">− Col</button>
+    <button type="button" tabindex="-1" data-tcmd="header" title="Toggle header row">Header</button>
     <button type="button" tabindex="-1" data-tcmd="del-table" title="Delete table">🗑</button>
   </div>
 
@@ -127,6 +133,7 @@
       <tr><td>Ctrl+0</td><td>Remove color</td></tr>
       <tr><td>Ctrl+Alt+1 … 3</td><td>Heading 1 / 2 / 3 (again to remove; Ctrl+Alt+0 = normal)</td></tr>
       <tr><td>Ctrl+B / Ctrl+I</td><td>Bold / italic (wraps the selection)</td></tr>
+      <tr><td>Ctrl+H / Ctrl+T</td><td>Highlight / strikethrough</td></tr>
       <tr><td>Ctrl+K</td><td>Insert link (selected text becomes the link text)</td></tr>
       <tr><td>Ctrl+.</td><td>Expand / collapse</td></tr>
       <tr><td>Ctrl+Shift+Backspace</td><td>Delete item (with everything under it)</td></tr>
@@ -138,6 +145,8 @@
       <tr><td>Enter</td><td>Cell below (adds a row at the bottom)</td></tr>
       <tr><td>Ctrl+Alt+↑ ↓ ← →</td><td>Insert row above / below, column left / right</td></tr>
       <tr><td>Ctrl+Shift+Backspace</td><td>Delete row</td></tr>
+      <tr><td>Ctrl+Shift+0 … 6</td><td>Color the whole row</td></tr>
+      <tr><td>Drag a column edge</td><td>Set the column's width (double-click the edge for automatic width)</td></tr>
       <tr><td>Drag a bullet</td><td>Move the item (long-press on touch). Drop it on a document in the sidebar to move it there.</td></tr>
       <tr><td>Drag in sidebar</td><td>Reorder documents and folders, or drop them into a folder</td></tr>
       <tr><td>Alt+→ / Alt+←</td><td>Zoom in / out (or click a bullet)</td></tr>

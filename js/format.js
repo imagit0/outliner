@@ -29,8 +29,8 @@ export const linkHref = (url) => (/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : 'http
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 export const esc = (s) => s.replace(/[&<>"]/g, (c) => ESC[c]);
 const md = (s) => `<span class="md">${esc(s)}</span>`;
-const link = (href, inner, img = false) =>
-  `<span class="link${img ? ' img' : ''}" data-href="${esc(href)}">${inner}</span>`;
+const link = (href, inner, cls = '') =>
+  `<span class="link${cls}" data-href="${esc(href)}">${inner}</span>`;
 const wrap = (mark, tag, s) => md(mark) + `<${tag}>${esc(s.slice(mark.length, -mark.length))}</${tag}>` + md(mark);
 
 export function format(text) {
@@ -40,8 +40,9 @@ export function format(text) {
   for (const m of text.matchAll(RE)) {
     out += esc(text.slice(last, m.index));
     const [s, imgCap, imgUrl, imgBare, code, bold, ital, strike, high, label, target, url] = m;
-    if (imgUrl !== undefined) out += md('![') + link(linkHref(imgUrl), esc(imgCap), true) + md(`](${imgUrl})`);
-    else if (imgBare) out += md('!') + link(imgBare, esc(imgBare), true);
+    // Image links show as an "Image" chip; the URL is only visible while editing.
+    if (imgUrl !== undefined) out += md('![') + link(linkHref(imgUrl), esc(imgCap), ' img') + md(`](${imgUrl})`);
+    else if (imgBare) out += md('!') + link(imgBare, md(imgBare), ' img bare');
     else if (code) out += md('`') + `<code>${esc(code.slice(1, -1))}</code>` + md('`');
     else if (bold) out += wrap('**', 'b', bold);
     else if (ital) out += wrap('__', 'i', ital);
