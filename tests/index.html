@@ -1,0 +1,177 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Outliner tests</title>
+<style>body{font:14px system-ui;margin:16px} .ok{color:#2a8} .fail{color:#c33;font-weight:bold}</style>
+<h1>Outliner tests</h1>
+<pre id="out"></pre>
+<script type="module">
+import { keyBetween, Outline, ROOT, sameNodes } from '../js/model.js';
+import { merge } from '../js/merge.js';
+import { format } from '../js/format.js';
+
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function test(name, fn) {
+  try { fn(); pass++; out.innerHTML += `<span class="ok">✓ ${name}</span>\n`; }
+  catch (e) { fail++; out.innerHTML += `<span class="fail">✗ ${name}: ${e.message}</span>\n`; console.error(e); }
+}
+const eq = (a, b, msg = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg} expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
+const ok = (c, msg) => { if (!c) throw new Error(msg || 'assertion failed'); };
+const texts = (o, pid = ROOT) => o.children(pid).map((n) => n.t);
+const clone = (x) => structuredClone(x);
+const tree = (o, pid = ROOT) => o.children(pid).map((n) => (o.hasChildren(n.id) ? [n.t, tree(o, n.id)] : n.t));
+
+test('keyBetween orders correctly', () => {
+  let keys = [keyBetween(null, null)];
+  for (let i = 0; i < 200; i++) keys.push(keyBetween(keys[keys.length - 1], null));
+  for (let i = 0; i < 200; i++) keys.unshift(keyBetween(null, keys[0]));
+  for (let i = 0; i < 200; i++) keys.splice(201, 0, keyBetween(keys[200], keys[201]));
+  for (let i = 1; i < keys.length; i++) ok(keys[i - 1] < keys[i], `${keys[i - 1]} < ${keys[i]} at ${i}`);
+  ok(keys.every((k) => !k.endsWith('0')), 'no trailing zero');
+});
+
+test('insert / move / indent', () => {
+  const o = new Outline();
+  const a = o.insert(ROOT, null, { t: 'a' });
+  const c = o.insert(ROOT, a.id, { t: 'c' });
+  const b = o.insert(ROOT, a.id, { t: 'b' });
+  eq(texts(o), ['a', 'b', 'c']);
+  o.move(c.id, a.id, null);
+  eq(tree(o), [['a', ['c']], 'b']);
+  ok(!o.move(a.id, c.id, null), 'cannot move into own descendant');
+  o.move(b.id, ROOT, null);
+  eq(tree(o), ['b', ['a', ['c']]]);
+});
+
+function setup() {
+  const o = new Outline();
+  const a = o.insert(ROOT, null, { t: 'a' });
+  const b = o.insert(ROOT, a.id, { t: 'b' });
+  const c = o.insert(ROOT, b.id, { t: 'c' });
+  return { base: clone(o.nodes), a: a.id, b: b.id, c: c.id };
+}
+
+test('merge: independent edits on both sides', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.a, { t: 'A local' });
+  R.update(s.c, { t: 'C remote' });
+  R.insert(ROOT, s.c, { t: 'd' });
+  const m = new Outline(merge(s.base, L.nodes, R.nodes));
+  eq(texts(m), ['A local', 'b', 'C remote', 'd']);
+});
+
+test('merge: same text edited both sides keeps both', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.b, { t: 'b-local' });
+  R.update(s.b, { t: 'b-remote' });
+  R.nodes[s.b].m += 1000; // remote newer
+  const m = new Outline(merge(s.base, L.nodes, R.nodes));
+  eq(texts(m), ['a', 'b-remote', 'b-local (conflict)', 'c']);
+  // The other device merging the result again must not duplicate the conflict.
+  for (const other of [R, L]) {
+    const m2 = new Outline(merge(s.base, other.nodes, m.nodes));
+    eq(texts(m2), ['a', 'b-remote', 'b-local (conflict)', 'c']);
+  }
+});
+
+test('merge: done on one side, text on the other', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.b, { d: true });
+  R.update(s.b, { t: 'B' });
+  const m = merge(s.base, L.nodes, R.nodes);
+  eq([m[s.b].t, m[s.b].d], ['B', true]);
+});
+
+test('merge: delete vs untouched deletes', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.remove(s.b);
+  eq(texts(new Outline(merge(s.base, L.nodes, R.nodes))), ['a', 'c']);
+});
+
+test('merge: delete vs edit keeps edit', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.remove(s.b);
+  R.update(s.b, { t: 'b edited' });
+  eq(texts(new Outline(merge(s.base, L.nodes, R.nodes))), ['a', 'b edited', 'c']);
+});
+
+test('merge: child added under remotely deleted parent resurrects parent', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.insert(s.b, null, { t: 'child' });
+  R.remove(s.b);
+  const m = new Outline(merge(s.base, L.nodes, R.nodes));
+  eq(tree(m), ['a', ['b', ['child']], 'c']);
+});
+
+test('merge: concurrent moves forming a cycle are broken', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.move(s.a, s.b, null);
+  R.move(s.b, s.a, null);
+  const nodes = merge(s.base, L.nodes, R.nodes);
+  const m = new Outline(nodes);
+  // every node must be reachable from root
+  const seen = new Set();
+  const walk = (id) => { for (const k of m.children(id)) { seen.add(k.id); walk(k.id); } };
+  walk(ROOT);
+  eq(seen.size, 3, 'all reachable');
+});
+
+test('merge: concurrent inserts at same spot both kept, stable order', () => {
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.insert(ROOT, s.a, { t: 'x' });
+  R.insert(ROOT, s.a, { t: 'y' });
+  const m1 = new Outline(merge(s.base, L.nodes, R.nodes));
+  const m2 = new Outline(merge(s.base, R.nodes, L.nodes));
+  eq(texts(m1), texts(m2));
+  eq(texts(m1).length, 5);
+  // and we can still insert between them
+  const [, x] = m1.children(ROOT);
+  m1.insert(ROOT, x.id, { t: 'z' });
+  eq(texts(m1).length, 6);
+});
+
+test('merge: no base (first connect) unions both', () => {
+  const L = new Outline(); L.insert(ROOT, null, { t: 'local' });
+  const R = new Outline(); R.insert(ROOT, null, { t: 'remote' });
+  const m = new Outline(merge(null, L.nodes, R.nodes));
+  eq(texts(m).sort(), ['local', 'remote']);
+});
+
+test('merge is a no-op when nothing changed', () => {
+  const s = setup();
+  ok(sameNodes(merge(s.base, clone(s.base), clone(s.base)), s.base));
+});
+
+test('restore bumps m only on changed nodes', () => {
+  const s = setup();
+  const o = new Outline(clone(s.base));
+  const before = o.snapshot();
+  o.update(s.a, { t: 'changed' });
+  const mB = o.nodes[s.b].m;
+  o.restore(before);
+  eq(o.nodes[s.a].t, 'a');
+  eq(o.nodes[s.b].m, mB);
+});
+
+test('format keeps raw text as textContent', () => {
+  for (const t of ['plain', '**bold** and *it* `c<o>de`', 'see https://example.com/a?b=1&c=2.', '#tag and a#nottag', '<script>x<\/script>', '']) {
+    const div = document.createElement('div');
+    div.innerHTML = format(t);
+    eq(div.textContent, t, `for ${t}`);
+  }
+  const d = document.createElement('div');
+  d.innerHTML = format('go to https://example.com/x.');
+  eq(d.querySelector('.link').dataset.href, 'https://example.com/x');
+});
+
+out.innerHTML += `\n${pass} passed, ${fail} failed\n`;
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script>
