@@ -4,7 +4,7 @@
 // The network fetch revalidates with the server ("no-cache") instead of
 // trusting the browser's HTTP cache, which GitHub Pages sets to 10 minutes.
 
-const CACHE = 'outliner-v15';
+const CACHE = 'outliner-v16';
 const SHELL = [
   './',
   'index.html',
@@ -16,6 +16,7 @@ const SHELL = [
   'js/drag.js',
   'js/format.js',
   'js/merge.js',
+  'js/menu.js',
   'js/model.js',
   'js/opml.js',
   'js/store.js',

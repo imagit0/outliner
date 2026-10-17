@@ -13,6 +13,7 @@ import { format, esc } from './format.js';
 import { load, save } from './store.js';
 import { Drag } from './drag.js';
 import { tableMethods } from './table.js';
+import { Menu } from './menu.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -42,6 +43,7 @@ export class UI {
     this.moveDlg = $('#move');
 
     document.body.classList.toggle('side-hidden', !!load('sideHidden'));
+    this.menu = new Menu();
     this.bind();
     this.drag = new Drag(this);
     this.zoomFromHash();
@@ -142,15 +144,13 @@ export class UI {
           return (
             `<div class="entry folder${open ? ' open' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
             `<span class="twisty"></span>${open ? ICON_FOLDER_OPEN : ICON_FOLDER}<span class="name">${esc(n.t || 'Untitled folder')}</span>` +
-            `<span class="acts">` +
-            btn('add', 'New document in this folder', '+') + btn('ren', 'Rename folder', '✎') + btn('del', 'Delete folder', '×') +
-            `</span></div>` + (open ? tree(n.id, depth + 1) : '')
+            `<span class="acts">${btn('more', 'Folder actions', '⋯')}</span></div>` + (open ? tree(n.id, depth + 1) : '')
           );
         }
         return (
           `<div class="entry doc${n.id === cur ? ' active' : ''}" data-doc="${n.id}" style="--d:${depth}">` +
           `${ICON_DOC}<span class="name">${esc(n.t || 'Untitled')}</span>` +
-          `<span class="acts">` + btn('ren', 'Rename document', '✎') + btn('del', 'Delete document', '×') + `</span>` +
+          `<span class="acts">${btn('more', 'Document actions', '⋯')}</span>` +
           `</div>`
         );
       }).join('');
@@ -709,13 +709,87 @@ export class UI {
     this.focus(d.id, 0);
   }
 
-  newFolder() {
+  newFolder(parentId = ROOT) {
     const name = prompt('Folder name:', '');
     if (name === null) return;
     this.checkpoint();
-    this.o.insert(ROOT, lastChildId(this.o, ROOT), { t: name.trim() || 'New folder', f: true });
+    this.o.insert(parentId, lastChildId(this.o, parentId), { t: name.trim() || 'New folder', f: true });
+    if (parentId !== ROOT && this.o.get(parentId).c) this.o.update(parentId, { c: false });
     this.onChange();
     this.renderSidebar();
+  }
+
+  // Copy a document, folder or item (with everything under it) right after
+  // the original. Documents and folders get " (copy)" added to the name.
+  duplicate(id) {
+    const n = this.o.get(id);
+    if (!n || n.id === ROOT || this.o.isCell(id) || this.o.isRow(id)) return;
+    if (this.o.isDoc(id) || n.f) {
+      this.checkpoint();
+      const name = (n.t || (n.f ? 'Untitled folder' : 'Untitled')) + ' (copy)';
+      this.o.copySubtree(id, n.p, id, { t: name });
+      this.onChange();
+      this.render();
+      this.toast(`Duplicated as “${name}”`);
+      return;
+    }
+    this.op(() => {
+      const c = this.o.copySubtree(id, n.p, id);
+      return { id: c.id, off: 'end' };
+    });
+  }
+
+  // ---------- menus ----------
+
+  openEntryMenu(id, x, y) {
+    const n = this.o.get(id);
+    if (!n) return;
+    const items = n.f
+      ? [
+          { label: 'New document here', run: () => this.newDoc(id) },
+          { label: 'New subfolder…', run: () => this.newFolder(id) },
+          'sep',
+          { label: 'Rename…', run: () => this.renameEntry(id) },
+          { label: 'Duplicate', run: () => this.duplicate(id) },
+          'sep',
+          { label: 'Delete folder…', danger: true, run: () => this.deleteEntry(id) },
+        ]
+      : [
+          { label: 'Open', run: () => this.openDoc(id) },
+          { label: 'Rename…', run: () => this.renameEntry(id) },
+          { label: 'Duplicate', run: () => this.duplicate(id) },
+          { label: 'Export as OPML', run: () => this.onExportOPML?.(id) },
+          'sep',
+          { label: 'Delete document…', danger: true, run: () => this.deleteEntry(id) },
+        ];
+    this.menu.lastKey = id;
+    this.menu.open(items, x, y);
+  }
+
+  openItemMenu(id, x, y) {
+    const n = this.o.get(id);
+    if (!n) return;
+    const items = [
+      { label: 'Zoom in', hint: 'Alt+→', run: () => this.zoomTo(id) },
+      { label: n.d ? 'Mark not complete' : 'Mark complete', hint: 'Ctrl+Enter', run: () => this.toggleDone(id) },
+      { label: n.c ? 'Expand' : 'Collapse', hint: 'Ctrl+.', run: () => this.setCollapsed(id, !n.c) },
+      'sep',
+      { swatches: [1, 2, 3, 4, 5, 6, 0], run: (c) => this.setColor(id, c) },
+      { buttons: [
+          { label: 'H1', value: 1, title: 'Heading 1' }, { label: 'H2', value: 2, title: 'Heading 2' },
+          { label: 'H3', value: 3, title: 'Heading 3' }, { label: '¶', value: 0, title: 'Normal text' },
+        ], run: (h) => this.setHeading(id, h) },
+      'sep',
+      { label: 'Duplicate', run: () => this.duplicate(id) },
+      { label: 'Move to document…', hint: 'Ctrl+Shift+M', run: () => this.openMove(id) },
+      'sep',
+      n.tb
+        ? { label: 'Delete table', danger: true, run: () => this.deleteTable(id) }
+        : { label: 'Delete', hint: 'Ctrl+Shift+⌫', danger: true, run: () => this.deleteItem(id) },
+    ];
+    if (!this.o.hasChildren(id)) items.splice(2, 1); // nothing to collapse
+    this.menu.lastKey = id;
+    this.menu.open(items, x, y);
   }
 
   renameEntry(id) {
@@ -963,11 +1037,30 @@ export class UI {
       const entry = e.target.closest('.entry');
       if (!entry) return;
       const id = entry.dataset.doc;
-      if (e.target.closest('.del')) return this.deleteEntry(id);
-      if (e.target.closest('.ren')) return this.renameEntry(id);
-      if (e.target.closest('.add')) return this.newDoc(id);
+      const more = e.target.closest('.more');
+      if (more) {
+        // A second click on the same ⋯ closes the menu instead of reopening it.
+        if (this.menu.lastKey === id && Date.now() - this.menu.closedAt < 300) return;
+        const r = more.getBoundingClientRect();
+        return this.openEntryMenu(id, r.left, r.bottom + 2);
+      }
       if (this.o.get(id).f) return this.toggleFolder(id);
       this.openDoc(id);
+    });
+    // Right-click on a document/folder or on an item's bullet: our menu.
+    // (Right-click in text keeps the browser's menu for spelling and paste.)
+    this.docs.addEventListener('contextmenu', (e) => {
+      const entry = e.target.closest('.entry');
+      if (!entry) return;
+      e.preventDefault();
+      this.openEntryMenu(entry.dataset.doc, e.clientX, e.clientY);
+    });
+    m.addEventListener('contextmenu', (e) => {
+      const bullet = e.target.closest('.bullet');
+      const id = bullet?.closest('.item')?.dataset.item;
+      if (!id) return;
+      e.preventDefault();
+      this.openItemMenu(id, e.clientX, e.clientY);
     });
     this.searchAllBtn.addEventListener('click', () => this.setSearchAll(!this.prefs.searchAll));
 

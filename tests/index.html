@@ -201,6 +201,24 @@ test('OPML import of Dynalist-style notes and colors', () => {
 
 function lastId(o, pid) { const k = o.children(pid); return k.length ? k[k.length - 1].id : null; }
 
+test('copySubtree makes an independent deep copy in order', () => {
+  const o = new Outline();
+  const d = o.insert(ROOT, null, { t: 'doc', cl: 2 });
+  const a = o.insert(d.id, null, { t: 'a', h: 1 });
+  o.insert(a.id, null, { t: 'a1', d: true });
+  o.insert(d.id, a.id, { t: 'b' });
+  const t = o.insert(d.id, lastId(o, d.id), { t: 'tbl', tb: true, hd: true, cw: '50,' });
+  const r = o.insert(t.id, null, {}); o.insert(r.id, null, { t: 'c1' }); o.insert(r.id, lastId(o, r.id), { t: 'c2' });
+  const copy = o.copySubtree(d.id, ROOT, d.id, { t: 'doc (copy)' });
+  eq(texts(o), ['doc', 'doc (copy)']);
+  eq(tree(o, copy.id), [['a', ['a1']], 'b', ['tbl', [['', ['c1', 'c2']]]]]);
+  const [ca, , ct] = o.children(copy.id);
+  eq([copy.cl, ca.h, o.children(ca.id)[0].d, ct.tb, ct.hd, ct.cw], [2, 1, true, true, true, '50,']);
+  ok(ca.id !== a.id, 'new ids');
+  o.update(ca.id, { t: 'changed' });
+  eq(o.get(a.id).t, 'a', 'original untouched');
+});
+
 test('merge: delete vs untouched deletes', () => {
   const s = setup();
   const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));

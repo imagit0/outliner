@@ -220,6 +220,18 @@ export class Outline {
     if ('p' in fields || 'k' in fields) this.invalidate();
   }
 
+  // Deep copy of id (and everything under it) placed in pid after afterId.
+  // `fields` overrides fields on the top copy (e.g. a new name).
+  copySubtree(id, pid, afterId, fields = {}) {
+    const src = this.nodes[id];
+    const keep = {};
+    for (const f of FIELDS) if (f !== 'p' && f !== 'k' && src[f] !== undefined) keep[f] = src[f];
+    const top = this.insert(pid, afterId, { ...keep, ...fields });
+    let prev = null;
+    for (const child of this.children(id)) prev = this.copySubtree(child.id, top.id, prev).id;
+    return top;
+  }
+
   remove(id) {
     if (id === ROOT) return;
     for (const c of this.children(id)) this.remove(c.id);

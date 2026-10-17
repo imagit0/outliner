@@ -177,11 +177,8 @@ menu.addEventListener('click', async (e) => {
       return download(`outline-${new Date().toISOString().slice(0, 10)}.txt`, toText(ui.zoom), 'text/plain');
     case 'm-import':
       return $('#import-file').click();
-    case 'm-export-opml': {
-      const doc = outline.docOf(ui.zoom);
-      const name = (doc.t || 'Untitled').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80);
-      return download(`${name}.opml`, exportOPML(outline, doc.id), 'text/x-opml');
-    }
+    case 'm-export-opml':
+      return exportDocOPML(outline.docOf(ui.zoom).id);
     case 'm-import-opml':
       return $('#import-opml').click();
     case 'm-help':
@@ -270,6 +267,13 @@ function openSettings() {
   $('#set-md').checked = !!prefs.showMd;
   if (!$('#settings').open) $('#settings').showModal();
 }
+
+function exportDocOPML(docId) {
+  const doc = outline.get(docId);
+  const name = (doc.t || 'Untitled').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80);
+  download(`${name}.opml`, exportOPML(outline, doc.id), 'text/x-opml');
+}
+ui.onExportOPML = exportDocOPML;
 
 function download(name, text, type) {
   const a = document.createElement('a');

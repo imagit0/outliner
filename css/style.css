@@ -165,6 +165,27 @@ header {
   .entry .acts { display: flex; position: static; transform: none; background: none; opacity: .6; }
 }
 body.dragging .entry .acts { display: none; }
+.entry .more { font-size: 16px; letter-spacing: 1px; }
+
+/* ---------- popup menu (⋯ and right-click) ---------- */
+#ctx-menu {
+  position: fixed; z-index: 80; min-width: 200px; padding: 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  font-size: 14px; user-select: none; -webkit-user-select: none;
+}
+#ctx-menu[hidden] { display: none; }
+#ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
+#ctx-menu .m-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; width: 100%;
+  padding: 7px 10px; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer;
+}
+#ctx-menu .m-item:hover { background: var(--hover); }
+#ctx-menu .m-item small { color: var(--muted); font-size: 12px; }
+#ctx-menu .m-item.danger { color: #e5534b; }
+#ctx-menu .m-row { display: flex; gap: 6px; padding: 4px 6px; }
+#ctx-menu .sw { width: 24px; height: 24px; font-size: 12px; }
+#ctx-menu .fb { width: 34px; height: 28px; font-size: 13px; }
+#ctx-menu .fb:hover { background: var(--hover); }
 .side-top { display: flex; gap: 4px; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .side-add {
   flex: 1; padding: 6px 8px; text-align: center; font-size: 14px;

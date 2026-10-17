@@ -6,7 +6,8 @@ No build step: plain HTML/CSS/ES modules.
 
 ## Features
 
-- Multiple documents in nested folders, shown in a sidebar (a slide-out drawer on phones). You can create, rename and delete (undoably) documents and folders, and drag them to reorder or move them into folders.
+- Multiple documents in nested folders, shown in a sidebar (a slide-out drawer on phones). You can create, rename, duplicate and delete (undoably) documents and folders, and drag them to reorder or move them into folders. Use each entry's **⋯** menu, or right-click it on desktop.
+- Right-click an item's bullet for a menu: zoom, complete, collapse, color, heading, duplicate, move to document, delete. Right-clicking text still gives the browser's menu (spelling, cut/copy/paste).
 - Nested bullets: Enter, Tab / Shift+Tab, move, collapse, complete (strikethrough), hide completed
 - Line colors: Ctrl+1–6 (red, orange, yellow, green, blue, purple), Ctrl+0 to clear
 - Drag and drop: drag a bullet to move an item (long-press first on touch). Drop it on a sidebar document to move it there, or between documents to turn it into a document.
