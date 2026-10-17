@@ -16,6 +16,8 @@
   --cl-5: #d8e7fd;
   --cl-6: #e9defa;
   --font: Arial, "Liberation Sans", Roboto, Helvetica, sans-serif;
+  --fs: 17px; /* outline text size (Settings → Text size) */
+  --mark: #fff2a8;
   --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   color-scheme: light;
 }
@@ -23,6 +25,7 @@
    The dark palette is listed twice: once for "dark", once for "system" when
    the OS is in dark mode. */
 :root[data-theme="dark"] {
+  --mark: rgba(255, 214, 0, .32);
   --bg: #1f2328;
   --fg: #e6e8eb;
   --muted: #8b939d;
@@ -43,6 +46,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
+    --mark: rgba(255, 214, 0, .32);
     --bg: #1f2328;
     --fg: #e6e8eb;
     --muted: #8b939d;
@@ -192,8 +196,9 @@ body.dragging .entry .acts { display: none; }
 
 /* ---------- outline ---------- */
 main {
-  max-width: 820px; margin: 0 auto;
+  max-width: 900px; margin: 0 auto;
   padding: 20px 16px 50vh;
+  font-size: var(--fs);
 }
 .title {
   font-size: 1.6em; font-weight: 650; line-height: 1.3;
@@ -203,13 +208,14 @@ main {
 /* --lh = height of the first text line, --pad = vertical padding around the
    text. Toggle and bullet are centred on the first line using both, so they
    stay aligned for headings and on touch screens (bigger padding). */
-.row { --lh: 24px; --pad: 0px; display: flex; align-items: flex-start; padding: 1px 0; } /* 1px gap keeps colored lines apart */
-.row.h1 { --lh: 34px; }
-.row.h2 { --lh: 30px; }
-.row.h3 { --lh: 27px; }
-.row.h1 > .text { font-size: 1.55em; line-height: 34px; font-weight: 700; }
-.row.h2 > .text { font-size: 1.3em; line-height: 30px; font-weight: 700; }
-.row.h3 > .text { font-size: 1.12em; line-height: 27px; font-weight: 700; }
+.row { --lh: calc(var(--fs) * 1.5); --pad: 0px; display: flex; align-items: flex-start; padding: 1px 0; } /* 1px gap keeps colored lines apart */
+.row.h1 { --lh: calc(var(--fs) * 2.1); }
+.row.h2 { --lh: calc(var(--fs) * 1.85); }
+.row.h3 { --lh: calc(var(--fs) * 1.65); }
+.row > .text { line-height: var(--lh); }
+.row.h1 > .text { font-size: 1.55em; font-weight: 700; }
+.row.h2 > .text { font-size: 1.3em; font-weight: 700; }
+.row.h3 > .text { font-size: 1.12em; font-weight: 700; }
 .toggle {
   flex: none; width: 18px; height: calc(var(--lh) + 2 * var(--pad)); position: relative; cursor: pointer;
   color: var(--muted); opacity: 0;
@@ -274,13 +280,60 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 .text code { font-family: var(--mono); font-size: .9em; background: var(--code-bg); border-radius: 4px; padding: 0 3px; }
 .link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .text:focus .link { cursor: text; }
+.link.img::before { content: "🖼\FE0E"; margin-right: 3px; text-decoration: none; display: inline-block; }
+.link.img:empty::after { content: "image"; }
+.text mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+.text s { color: var(--muted); }
 
-.add {
-  margin: 4px 0 0 40px; padding: 6px 12px;
-  border: 1px dashed var(--line); border-radius: 8px; background: none; color: var(--muted); cursor: pointer;
+#img-pop {
+  position: fixed; z-index: 60; padding: 4px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
 }
-.add:hover { color: var(--fg); border-color: var(--muted); }
+#img-pop[hidden] { display: none; }
+#img-pop img { display: block; max-width: 100%; max-height: min(320px, 50vh); border-radius: 4px; }
+
 .empty { color: var(--muted); margin-left: 40px; }
+
+/* ---------- tables ---------- */
+/* Columns size to their widest cell; when the table would be wider than the
+   page, the browser narrows columns and the cell text wraps. */
+.table-wrap { margin: 2px 0 6px 40px; max-width: calc(100% - 40px); overflow-x: auto; }
+.tbl { border-collapse: collapse; table-layout: auto; }
+.tbl td { border: 1px solid var(--line); padding: 0; vertical-align: top; min-width: 4em; }
+.text.cell {
+  min-height: calc(var(--fs) * 1.5); padding: 3px 8px; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: break-word;
+}
+.text.cell:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.table-item > .row > .text:empty::before { content: attr(data-placeholder); color: var(--muted); }
+
+#table-tools {
+  position: absolute; z-index: 15; display: flex; gap: 2px; padding: 3px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+}
+#table-tools[hidden] { display: none; }
+#table-tools button {
+  border: 0; background: none; border-radius: 5px; padding: 4px 8px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+#table-tools button:hover { background: var(--hover); }
+
+#toast {
+  position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 70;
+  padding: 8px 16px; border-radius: 8px; background: var(--fg); color: var(--bg); font-size: 14px; box-shadow: var(--shadow);
+}
+#toast[hidden] { display: none; }
+
+#move { width: min(440px, calc(100vw - 32px)); }
+#move input {
+  width: 100%; padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+#move ul { list-style: none; margin: 10px 0 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+#move li { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+#move li.sel, #move li:hover { background: var(--hover); }
+#move li .ico { width: 16px; height: 16px; flex: none; color: var(--muted); }
+#move li small { color: var(--muted); margin-left: auto; font-size: 12px; }
+#move li.none { color: var(--muted); cursor: default; }
 
 /* ---------- touch toolbar ---------- */
 #toolbar {

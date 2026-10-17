@@ -46,6 +46,7 @@ export class Drag {
     const doc = !bullet && e.target.closest('#docs .entry');
     if (!bullet && !doc) return;
     if (doc && e.target.closest('button')) return;
+    if (bullet && !bullet.closest('.item').dataset.item) return; // placeholder line
     this.s = {
       kind: bullet ? 'item' : 'doc',
       id: bullet ? bullet.closest('.item').dataset.item : doc.dataset.doc,
@@ -221,9 +222,11 @@ export class Drag {
     const r = row.getBoundingClientRect();
     const textLeft = row.querySelector('.text').getBoundingClientRect().left;
     const expanded = !!item.querySelector(':scope > .children');
+    const isTable = item.classList.contains('table-item');
+    if (!id) return; // placeholder line
     let where;
     if (s.y < r.top + r.height / 2) where = 'before';
-    else if (expanded || s.x > textLeft + 40) where = 'child';
+    else if (!isTable && (expanded || s.x > textLeft + 40)) where = 'child';
     else where = 'after';
     // "after" an expanded item would land below its whole subtree.
     const top = where === 'before' ? r.top : where === 'after' ? item.getBoundingClientRect().bottom : r.bottom;

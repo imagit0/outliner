@@ -2,7 +2,7 @@
 // Network-first for our own files (so updates show up immediately when
 // online), falling back to the cache. Dropbox requests are not touched.
 
-const CACHE = 'outliner-v3';
+const CACHE = 'outliner-v4';
 const SHELL = [
   './',
   'index.html',
@@ -16,6 +16,7 @@ const SHELL = [
   'js/model.js',
   'js/store.js',
   'js/sync.js',
+  'js/table.js',
   'js/ui.js',
   'manifest.webmanifest',
   'icons/icon.svg',

@@ -149,6 +149,23 @@ test('merge: folder flag survives, missing f equals false', () => {
   ok(sameNodes(s.base, R2.nodes));
 });
 
+test('tables: row / cell detection and merge of tb', () => {
+  const o = new Outline();
+  const d = o.insert(ROOT, null, { t: 'doc' });
+  const t = o.insert(d.id, null, { tb: true });
+  const r = o.insert(t.id, null, {});
+  const c = o.insert(r.id, null, { t: 'x' });
+  ok(o.isTable(t.id) && o.isRow(r.id) && o.isCell(c.id));
+  ok(!o.isCell(r.id) && !o.isRow(c.id) && !o.isTable(d.id));
+  eq(o.docOf(c.id).id, d.id);
+  const s = setup();
+  const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
+  L.update(s.c, { tb: true });
+  R.update(s.c, { t: 'Table C' });
+  const m = merge(s.base, L.nodes, R.nodes);
+  eq([m[s.c].tb, m[s.c].t], [true, 'Table C']);
+});
+
 test('merge: delete vs untouched deletes', () => {
   const s = setup();
   const L = new Outline(clone(s.base)), R = new Outline(clone(s.base));
@@ -242,6 +259,16 @@ test('format keeps raw text as textContent', () => {
   eq([d.querySelector('.link').textContent, d.querySelector('.link').dataset.href], ['the docs', 'https://example.com/x?a=1']);
   d.innerHTML = format('[bare](example.com)');
   eq(d.querySelector('.link').dataset.href, 'https://example.com');
+  for (const t of ['~~gone~~ and ==hi==', '![cat](https://x.io/c.jpg) ok', '!https://x.io/c.png', '![](a.png)']) {
+    d.innerHTML = format(t);
+    eq(d.textContent, t, `text for ${t}`);
+  }
+  d.innerHTML = format('~~gone~~ and ==hi==');
+  eq([d.querySelector('s').textContent, d.querySelector('mark').textContent], ['gone', 'hi']);
+  d.innerHTML = format('![cat](https://x.io/c.jpg) ok');
+  eq([d.querySelector('.img').textContent, d.querySelector('.img').dataset.href], ['cat', 'https://x.io/c.jpg']);
+  d.innerHTML = format('!https://x.io/c.png');
+  eq(d.querySelector('.img').dataset.href, 'https://x.io/c.png');
   d.innerHTML = format('a __b__ *c*');
   eq(d.querySelector('i').textContent, 'b');
   eq(d.querySelectorAll('i, b').length, 1, 'single * is plain text');

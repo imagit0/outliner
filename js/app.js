@@ -8,7 +8,8 @@ import { load, save, requestPersistence } from './store.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, ...load('prefs', {}) };
+const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 // ---------- appearance (theme + font) ----------
 // Each font falls back to something similar on Android, which lacks most
@@ -28,6 +29,7 @@ function applyAppearance() {
   const root = document.documentElement;
   root.dataset.theme = prefs.theme;
   root.style.setProperty('--font', (FONTS[prefs.font] || FONTS.arial)[1]);
+  root.style.setProperty('--fs', `${prefs.size}px`);
   // Match the browser/OS chrome (Android status bar, installed-app title bar).
   requestAnimationFrame(() => {
     $('#theme-color').content = getComputedStyle(document.body).backgroundColor;
@@ -148,9 +150,7 @@ menu.addEventListener('click', async (e) => {
     case 'm-help':
       return $('#help').showModal();
     case 'm-settings':
-      $('#set-theme').value = prefs.theme;
-      $('#set-font').value = prefs.font;
-      return $('#settings').showModal();
+      return openSettings();
   }
 });
 
@@ -177,14 +177,22 @@ $('#help-close').addEventListener('click', () => $('#help').close());
 $('#set-font').innerHTML = Object.entries(FONTS)
   .map(([k, [label, stack]]) => `<option value="${k}" style='font-family:${stack}'>${label}</option>`)
   .join('');
-for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font']]) {
+$('#set-size').innerHTML = SIZES.map((s) => `<option value="${s}">${s}${s === 17 ? ' (default)' : ''}</option>`).join('');
+for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-size', 'size']]) {
   $(id).addEventListener('change', (e) => {
-    prefs[key] = e.target.value;
+    prefs[key] = key === 'size' ? Number(e.target.value) : e.target.value;
     save('prefs', prefs);
     applyAppearance();
   });
 }
 $('#settings-close').addEventListener('click', () => $('#settings').close());
+
+function openSettings() {
+  $('#set-theme').value = prefs.theme;
+  $('#set-font').value = prefs.font;
+  $('#set-size').value = String(prefs.size);
+  if (!$('#settings').open) $('#settings').showModal();
+}
 
 function download(name, text, type) {
   const a = document.createElement('a');
@@ -197,7 +205,15 @@ function download(name, text, type) {
 function toText(pid, depth = 0) {
   let s = '';
   for (const n of outline.children(pid)) {
-    s += '  '.repeat(depth) + (n.d ? '- [x] ' : '- ') + n.t + '\n' + toText(n.id, depth + 1);
+    s += '  '.repeat(depth) + (n.d ? '- [x] ' : '- ') + n.t + '\n';
+    if (n.tb) {
+      // Tables as "| a | b |" lines.
+      for (const row of outline.children(n.id)) {
+        s += '  '.repeat(depth + 1) + '| ' + outline.children(row.id).map((c) => c.t).join(' | ') + ' |\n';
+      }
+    } else {
+      s += toText(n.id, depth + 1);
+    }
   }
   return s;
 }
@@ -210,10 +226,15 @@ function syncNow() {
 }
 
 // Ctrl+S (Cmd+S on Mac): sync now instead of the browser's "save page".
+// Ctrl+, : settings.
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+  if (e.key.toLowerCase() === 's') {
     e.preventDefault();
     syncNow();
+  } else if (e.code === 'Comma') {
+    e.preventDefault();
+    openSettings();
   }
 });
 $('#sync').addEventListener('click', syncNow);

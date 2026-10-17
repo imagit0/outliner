@@ -12,9 +12,13 @@ No build step: plain HTML/CSS/ES modules.
 - Drag and drop: drag a bullet to move an item (long-press first on touch). Drop it on a sidebar document to move it there, or between documents to turn it into a document.
 - Zoom into any item (click its bullet), with breadcrumbs; the Android back button zooms back out
 - Search the current document, or all documents with the **All** button. All words must match; matching items are shown with their parents.
-- Inline `**bold**` (Ctrl+B), `__italic__` (Ctrl+I), `` `code` ``, `[text](url)` links (Ctrl+K) and plain web addresses (Dynalist syntax)
+- Inline `**bold**` (Ctrl+B), `__italic__` (Ctrl+I), `~~strikethrough~~`, `==highlight==`, `` `code` ``, `[text](url)` links (Ctrl+K) and plain web addresses (Dynalist syntax)
+- Image links: `![caption](url)` or `!https://…` show a preview on hover (tap on phones)
+- Tables (Ctrl+Alt+T or ▦ on phones): every cell is an ordinary line. Columns size to their content and wrap when the table gets too wide. A toolbar appears above the table while you edit a cell: add/remove rows and columns, delete the table. In a table, Tab moves to the next cell, Enter moves down a row (or adds one at the bottom), and Ctrl+Alt+arrows insert rows and columns.
+- Ctrl+Shift+Backspace deletes an item, Ctrl+. expands or collapses it, Ctrl+Shift+M moves it to another document, Ctrl+, opens Settings
+- An empty document starts with a blank first line with the cursor in it
 - Headings, 3 levels (Ctrl+Alt+1–3, Ctrl+Alt+0 for normal text)
-- Settings (⋮ → Settings): theme (dark by default, light, or same as the system) and font (Arial by default). These are saved per device.
+- Settings (⋮ → Settings, or Ctrl+,): theme (dark by default, light, or same as the system), font (Arial by default) and text size (17 by default). These are saved per device.
 - On phones, the **Aa** toolbar button has colors, headings, bold, italic and links.
 - Multi-line paste becomes separate items (indentation is kept)
 - Undo/redo, export/import a JSON backup, export as indented text

@@ -12,6 +12,7 @@ import { ROOT } from './model.js';
 import { format, esc } from './format.js';
 import { load, save } from './store.js';
 import { Drag } from './drag.js';
+import { tableMethods } from './table.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -35,6 +36,9 @@ export class UI {
     this.palette = $('#palette');
     this.docs = $('#docs');
     this.searchAllBtn = $('#search-all');
+    this.tableTools = $('#table-tools');
+    this.imgPop = $('#img-pop');
+    this.moveDlg = $('#move');
 
     document.body.classList.toggle('side-hidden', !!load('sideHidden'));
     this.bind();
@@ -73,7 +77,9 @@ export class UI {
       ? `<div class="list">${kids}</div>`
       : this.query
         ? `<p class="empty">No matches.</p>`
-        : `<button class="add" type="button">+ Add item</button>`;
+        : // Nothing here yet: an empty first line that becomes real when focused.
+          `<div class="list"><div class="item" data-item=""><div class="row"><span class="toggle"></span>` +
+          `<span class="bullet"></span><div class="text" contenteditable="plaintext-only" spellcheck="true" data-id="" data-new="${this.zoom}|"></div></div></div></div>`;
     this.main.innerHTML = html;
     this.renderCrumbs();
     this.renderSidebar();
@@ -90,6 +96,17 @@ export class UI {
   }
 
   renderNode(n, visible) {
+    if (n.tb) {
+      const open = !n.c || !!visible;
+      return (
+        `<div class="item table-item${n.d ? ' done' : ''}" data-item="${n.id}">` +
+        `<div class="row${n.h ? ` h${n.h}` : ''}">` +
+        `<span class="toggle ${open ? 'open' : 'closed'}" aria-hidden="true"></span>` +
+        `<span class="bullet${open ? '' : ' folded'}" title="Click to zoom, drag to move"></span>` +
+        `<div class="text${colorClass(n)}" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}" data-placeholder="Table">${format(n.t)}</div>` +
+        `</div>` + (open ? this.renderTable(n) : '') + `</div>`
+      );
+    }
     const kids = this.o.children(n.id).filter((k) => (visible ? visible.has(k.id) : this.prefs.showDone || !k.d));
     const has = kids.length > 0;
     const open = has && (!n.c || !!visible);
@@ -275,6 +292,7 @@ export class UI {
   // Backspace at the start of an item. Returns true if handled.
   backspace(id) {
     if (id === this.zoom) return false;
+    if (this.o.isCell(id)) return true; // cells never merge
     const n = this.o.get(id);
     const ids = this.visibleIds();
     const i = ids.indexOf(id);
@@ -289,8 +307,9 @@ export class UI {
       return true;
     }
     if (!prevId || prevId === this.zoom) return true;
-    // In all-documents search the item above may belong to another document.
-    if (this.o.docOf(prevId) !== this.o.docOf(id) || this.o.isDoc(prevId)) return true;
+    // In all-documents search the item above may belong to another document;
+    // and an item right below a table must not merge into a cell.
+    if (this.o.docOf(prevId) !== this.o.docOf(id) || this.o.isDoc(prevId) || this.o.isCell(prevId)) return true;
     const prev = this.o.get(prevId);
     if (hasKids && (this.o.prevSibling(id)?.id !== prevId || this.o.hasChildren(prevId))) return true;
     this.op(() => {
@@ -308,11 +327,11 @@ export class UI {
   }
 
   indent(id) {
-    if (id === this.zoom) return;
+    if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const prev = this.o.prevSibling(id);
-      if (!prev) return false;
+      if (!prev || prev.tb) return false;
       this.o.move(id, prev.id, lastChildId(this.o, prev.id));
       if (prev.c) this.o.update(prev.id, { c: false });
       return { id, off };
@@ -322,7 +341,7 @@ export class UI {
   outdent(id) {
     const n = this.o.get(id);
     // Never outdent out of the zoomed item or out of a document.
-    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p)) return;
+    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p) || this.o.isCell(id)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const parent = this.o.get(n.p);
@@ -332,7 +351,7 @@ export class UI {
   }
 
   moveUp(id) {
-    if (id === this.zoom) return;
+    if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const n = this.o.get(id);
@@ -345,7 +364,7 @@ export class UI {
   }
 
   moveDown(id) {
-    if (id === this.zoom) return;
+    if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const n = this.o.get(id);
@@ -357,6 +376,7 @@ export class UI {
   }
 
   toggleDone(id) {
+    if (this.o.isCell(id)) return;
     const off = this.caretOf(id);
     const ids = this.visibleIds();
     this.op(() => {
@@ -386,7 +406,7 @@ export class UI {
 
   // Heading level 1-3; choosing the current level again (or 0) removes it.
   setHeading(id, h) {
-    if (id === this.zoom) return;
+    if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
     this.op(() => {
       const cur = this.o.get(id).h || 0;
@@ -456,6 +476,92 @@ export class UI {
     });
   }
 
+  // Ctrl+Shift+Backspace: delete the item and everything under it (in a
+  // table cell: delete that row).
+  deleteItem(id) {
+    if (id === this.zoom) return;
+    if (this.o.isCell(id)) return this.delRow(id);
+    const els = [...this.main.querySelectorAll('.text')];
+    const mine = (el) => el.dataset.id === id || this.o.isAncestor(id, el.dataset.id);
+    const i = els.findIndex(mine);
+    const next = els.slice(i).find((el) => !mine(el) && el.dataset.id);
+    const prev = els.slice(0, i).reverse().find((el) => el.dataset.id);
+    const target = prev && prev.dataset.id !== this.zoom ? prev : next || prev;
+    this.op(() => {
+      this.o.remove(id);
+      return target ? { id: target.dataset.id, off: target === next ? 0 : 'end' } : null;
+    });
+  }
+
+  // ---------- move to another document (Ctrl+Shift+M) ----------
+
+  openMove(id) {
+    if (!id || id === this.zoom || this.o.isCell(id) || this.o.isRow(id)) return;
+    this.moveId = id;
+    const input = this.moveDlg.querySelector('input');
+    input.value = '';
+    this.renderMoveList();
+    this.moveDlg.showModal();
+    input.focus();
+  }
+
+  renderMoveList() {
+    const q = this.moveDlg.querySelector('input').value.toLowerCase();
+    const here = this.o.docOf(this.moveId)?.id;
+    const path = (d) => this.o.ancestors(d.id).filter((a) => a.f).map((a) => a.t || 'Untitled folder');
+    const docs = this.o.allDocs().filter((d) => (d.t || 'Untitled').toLowerCase().includes(q));
+    this.moveDlg.querySelector('ul').innerHTML = docs
+      .map((d, i) => {
+        const p = path(d);
+        return `<li data-doc="${d.id}" class="${i === 0 ? 'sel' : ''}">${ICON_DOC}<span>${esc(d.t || 'Untitled')}</span>` +
+          (p.length ? `<small>${esc(p.join(' / '))}</small>` : '') + (d.id === here ? '<small>(current)</small>' : '') + `</li>`;
+      })
+      .join('') || '<li class="none">No matching documents</li>';
+  }
+
+  moveTo(docId) {
+    const id = this.moveId;
+    this.moveDlg.close();
+    if (!docId || !this.o.get(id)) return;
+    const els = [...this.main.querySelectorAll('.text')];
+    const mine = (el) => el.dataset.id === id || this.o.isAncestor(id, el.dataset.id);
+    const i = els.findIndex(mine);
+    const nb = els.slice(i).find((el) => !mine(el) && el.dataset.id) || els.slice(0, i).reverse().find((el) => el.dataset.id);
+    const name = this.o.get(docId).t || 'Untitled';
+    this.op(() => {
+      if (!this.placeItem(id, docId, 'into')) return false;
+      return nb && this.o.get(nb.dataset.id) && this.textEl(nb.dataset.id) !== null ? { id: nb.dataset.id, off: 'end' } : null;
+    });
+    this.toast(`Moved to “${name}”`);
+  }
+
+  toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => { t.hidden = true; }, 2500);
+  }
+
+  // ---------- image preview for !-links ----------
+
+  showImage(link) {
+    const pop = this.imgPop;
+    const img = pop.querySelector('img');
+    if (img.getAttribute('src') !== link.dataset.href) img.src = link.dataset.href;
+    pop.dataset.href = link.dataset.href;
+    pop.hidden = false;
+    const r = link.getBoundingClientRect();
+    const w = Math.min(420, innerWidth - 16);
+    pop.style.maxWidth = `${w}px`;
+    pop.style.left = `${Math.min(Math.max(r.left, 8), innerWidth - w - 8)}px`;
+    const below = innerHeight - r.bottom > 240 || r.top < 240;
+    pop.style.top = below ? `${r.bottom + 6}px` : '';
+    pop.style.bottom = below ? '' : `${innerHeight - r.top + 6}px`;
+  }
+
+  hideImage() { this.imgPop.hidden = true; }
+
   addItem() {
     this.op(() => {
       const c = this.o.insert(this.zoom, lastChildId(this.o, this.zoom), {});
@@ -509,8 +615,9 @@ export class UI {
   placeItem(src, targetId, where) {
     const t = this.o.get(targetId);
     if (!t || src === targetId || this.o.isAncestor(src, targetId)) return false;
+    if (this.o.isRow(targetId) || this.o.isCell(targetId)) return false;
     if (where === 'child') {
-      if (!this.o.move(src, targetId, null)) return false;
+      if (t.tb || !this.o.move(src, targetId, null)) return false;
       if (t.c) this.o.update(targetId, { c: false });
       return true;
     }
@@ -546,6 +653,23 @@ export class UI {
     this.zoom = id && this.o.get(id) ? id : null;
     this.render();
     window.scrollTo(0, 0);
+    // An empty document: put the cursor on its first (placeholder) line.
+    if (!this.query && this.o.isDoc(this.zoom) && !this.o.hasChildren(this.zoom)) {
+      this.main.querySelector('.text[data-new]')?.focus();
+    }
+  }
+
+  // A placeholder line (empty doc, or a missing table cell) becomes a real
+  // node the moment it gets focus.
+  materialize(el) {
+    const [p, after] = el.dataset.new.split('|');
+    if (!this.o.get(p)) return;
+    const n = this.o.insert(p, after && this.o.get(after) ? after : null, {});
+    el.dataset.id = n.id;
+    delete el.dataset.new;
+    const item = el.closest('.item');
+    if (item && item.dataset.item === '') item.dataset.item = n.id;
+    this.onChange();
   }
 
   openDoc(id) {
@@ -651,7 +775,6 @@ export class UI {
 
     m.addEventListener('click', (e) => {
       const t = e.target;
-      if (t.closest('.add')) return this.addItem();
       const open = t.closest('[data-open]');
       if (open) {
         e.preventDefault();
@@ -667,18 +790,43 @@ export class UI {
     });
 
     // Links open on tap when not editing that item (or with Ctrl/Cmd).
+    // Image links (!…) on touch screens show the preview first instead.
     m.addEventListener('pointerdown', (e) => {
       const link = e.target.closest('.link');
-      if (link && (!this.isEditing(link) || e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        window.open(link.dataset.href, '_blank', 'noopener');
+      if (!link || (this.isEditing(link) && !e.ctrlKey && !e.metaKey)) return;
+      e.preventDefault();
+      if (link.classList.contains('img') && e.pointerType !== 'mouse') {
+        if (this.imgPop.hidden || this.imgPop.dataset.href !== link.dataset.href) this.showImage(link);
+        else this.hideImage();
+        return;
       }
+      window.open(link.dataset.href, '_blank', 'noopener');
     });
+    m.addEventListener('mouseover', (e) => {
+      const link = e.target.closest('.link.img');
+      if (link) this.showImage(link);
+    });
+    m.addEventListener('mouseout', (e) => {
+      const link = e.target.closest('.link.img');
+      if (link && !link.contains(e.relatedTarget)) this.hideImage();
+    });
+    this.imgPop.addEventListener('click', () => {
+      window.open(this.imgPop.dataset.href, '_blank', 'noopener');
+      this.hideImage();
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.imgPop.hidden && !e.target.closest('#img-pop, .link.img')) this.hideImage();
+    });
+    window.addEventListener('scroll', () => this.hideImage(), { passive: true });
 
     m.addEventListener('focusin', (e) => {
-      if (!e.target.classList.contains('text')) return;
-      this.focusId = e.target.dataset.id;
+      const el = e.target;
+      if (!el.classList.contains('text')) return;
+      if (el.dataset.new !== undefined) this.materialize(el);
+      this.focusId = el.dataset.id;
       document.body.classList.add('editing');
+      if (el.classList.contains('cell')) this.showTableTools(el);
+      else this.tableTools.hidden = true;
     });
 
     m.addEventListener('focusout', (e) => {
@@ -687,21 +835,25 @@ export class UI {
       const n = this.o.get(el.dataset.id);
       if (n && el.isConnected) el.innerHTML = format(n.t);
       setTimeout(() => {
-        if (!document.activeElement?.classList?.contains('text')) {
+        const a = document.activeElement;
+        if (!a?.classList?.contains('text')) {
           document.body.classList.remove('editing');
           this.palette.hidden = true;
         }
+        if (!a?.classList?.contains('cell')) this.tableTools.hidden = true;
       }, 0);
     });
 
     m.addEventListener('beforeinput', (e) => {
       const el = e.target;
       if (!el.classList || !el.classList.contains('text')) return;
+      if (el.dataset.new !== undefined) this.materialize(el);
       const id = el.dataset.id;
       switch (e.inputType) {
         case 'insertParagraph':
         case 'insertLineBreak': {
           e.preventDefault();
+          if (this.o.isCell(id)) return this.cellEnter(id);
           const off = getCaret(el);
           const sel = getSelection();
           if (!sel.isCollapsed) sel.deleteFromDocument();
@@ -723,15 +875,24 @@ export class UI {
     });
 
     m.addEventListener('input', (e) => {
-      if (e.target.classList.contains('text')) this.syncText(e.target);
+      const el = e.target;
+      if (!el.classList.contains('text')) return;
+      if (el.dataset.new !== undefined) this.materialize(el);
+      this.syncText(el);
     });
 
     m.addEventListener('paste', (e) => {
       const el = e.target.closest && e.target.closest('.text');
       if (!el) return;
+      if (el.dataset.new !== undefined) this.materialize(el);
       const text = e.clipboardData.getData('text/plain');
       if (!text.includes('\n')) return;
       e.preventDefault();
+      if (el.classList.contains('cell')) {
+        // A cell is one line: join pasted lines with spaces.
+        document.execCommand('insertText', false, text.replace(/\s*\r?\n\s*/g, ' ').trim());
+        return;
+      }
       const sel = getSelection();
       if (!sel.isCollapsed) sel.deleteFromDocument();
       this.syncText(el);
@@ -795,10 +956,41 @@ export class UI {
     // Touch toolbar. Preventing pointerdown/mousedown keeps focus (and the
     // soft keyboard) on the item being edited.
     const keep = (e) => { if (e.target.closest('button')) e.preventDefault(); };
-    for (const el of [this.toolbar, this.palette]) {
+    for (const el of [this.toolbar, this.palette, this.tableTools]) {
       el.addEventListener('pointerdown', keep);
       el.addEventListener('mousedown', keep);
     }
+    this.tableTools.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tcmd]');
+      const id = document.activeElement?.dataset?.id || this.focusId;
+      if (b) this.tableCommand(b.dataset.tcmd, id);
+    });
+
+    // Move-to-document dialog
+    const moveInput = this.moveDlg.querySelector('input');
+    const moveList = this.moveDlg.querySelector('ul');
+    moveInput.addEventListener('input', () => this.renderMoveList());
+    moveInput.addEventListener('keydown', (e) => {
+      const items = [...moveList.querySelectorAll('li[data-doc]')];
+      let i = items.findIndex((li) => li.classList.contains('sel'));
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        i = Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+        items.forEach((li, j) => li.classList.toggle('sel', j === i));
+        items[i]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (items[i]) this.moveTo(items[i].dataset.doc);
+      }
+    });
+    moveList.addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-doc]');
+      if (li) this.moveTo(li.dataset.doc);
+    });
+    this.moveDlg.addEventListener('close', () => {
+      if (this.moveId && this.o.get(this.moveId) && this.textEl(this.moveId)) this.focus(this.moveId);
+      this.moveId = null;
+    });
     this.toolbar.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-cmd]');
       if (!b) return;
@@ -817,7 +1009,12 @@ export class UI {
         case 'h0': return this.setHeading(id, 0);
         case 'bold': return this.wrap(id, '**');
         case 'italic': return this.wrap(id, '__');
+        case 'strike': return this.wrap(id, '~~');
+        case 'highlight': return this.wrap(id, '==');
         case 'link': return this.insertLink(id);
+        case 'table': return this.insertTable(id);
+        case 'move': return this.openMove(id);
+        case 'delete': return this.deleteItem(id);
       }
     });
   }
@@ -838,8 +1035,11 @@ export class UI {
       case 'up': return this.moveUp(id);
       case 'down': return this.moveDown(id);
       case 'done': return this.toggleDone(id);
-      case 'zoom': return this.zoomTo(id);
-      case 'collapse': return this.setCollapsed(id, !this.o.get(id).c);
+      case 'zoom': return this.o.isCell(id) ? undefined : this.zoomTo(id);
+      case 'collapse': {
+        const target = this.o.isCell(id) ? this.cellPos(id).table.id : id;
+        return this.setCollapsed(target, !this.o.get(target).c);
+      }
     }
   }
 
@@ -866,11 +1066,39 @@ export class UI {
   onKey(e) {
     const el = e.target;
     if (!el.classList.contains('text')) return;
+    if (el.dataset.new !== undefined && !['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) this.materialize(el);
     const id = el.dataset.id;
     const mod = isMac ? e.metaKey : e.ctrlKey;
     const key = e.key;
     const handled = () => { e.preventDefault(); e.stopPropagation(); };
+    const plain = !mod && !e.altKey && !e.shiftKey;
 
+    // Table cells
+    if (this.o.isCell(id)) {
+      if (key === 'Tab') { handled(); return this.cellStep(id, e.shiftKey ? -1 : 1); }
+      if (mod && e.altKey && !e.shiftKey && key.startsWith('Arrow')) {
+        handled();
+        if (key === 'ArrowUp') return this.addRow(id, false);
+        if (key === 'ArrowDown') return this.addRow(id, true);
+        if (key === 'ArrowLeft') return this.addCol(id, false);
+        return this.addCol(id, true);
+      }
+      if ((key === 'ArrowUp' || key === 'ArrowDown') && plain) {
+        const up = key === 'ArrowUp';
+        if (!caretOnEdgeLine(el, up)) return;
+        handled();
+        return this.cellVertical(id, up, getCaret(el) ?? 0);
+      }
+    }
+
+    if (mod && e.shiftKey && !e.altKey && key === 'Backspace') { handled(); return this.deleteItem(id); }
+    if (mod && e.shiftKey && !e.altKey && e.code === 'KeyM') { handled(); return this.openMove(id); }
+    if (mod && !e.shiftKey && !e.altKey && e.code === 'Period') {
+      handled();
+      const target = this.o.isCell(id) ? this.cellPos(id).table.id : id;
+      return this.setCollapsed(target, !this.o.get(target).c);
+    }
+    if (mod && e.altKey && !e.shiftKey && e.code === 'KeyT') { handled(); return this.insertTable(id); }
     if (key === 'Tab') { handled(); return e.shiftKey ? this.outdent(id) : this.indent(id); }
     if (mod && key === 'Enter') { handled(); return this.toggleDone(id); }
     if (mod && key.toLowerCase() === 'z') { handled(); return this.undo(e.shiftKey); }
@@ -893,23 +1121,26 @@ export class UI {
     }
     if (key === 'Escape') { handled(); el.blur(); return; }
 
-    if ((key === 'ArrowUp' || key === 'ArrowDown') && !e.shiftKey && !mod && !e.altKey) {
+    if ((key === 'ArrowUp' || key === 'ArrowDown') && plain) {
       const up = key === 'ArrowUp';
       if (!caretOnEdgeLine(el, up)) return;
-      const ids = this.visibleIds();
-      const i = ids.indexOf(id) + (up ? -1 : 1);
-      if (i < 0 || i >= ids.length) return;
+      const els = [...this.main.querySelectorAll('.text')];
+      const target = els[els.indexOf(el) + (up ? -1 : 1)];
+      if (!target) return;
       handled();
       const off = getCaret(el) ?? 0;
-      const target = this.textEl(ids[i]);
-      this.focus(ids[i], Math.min(off, target.textContent.length));
+      target.focus({ preventScroll: true });
+      setCaret(target, Math.min(off, target.textContent.length));
+      target.scrollIntoView({ block: 'nearest' });
     }
   }
 }
 
+Object.assign(UI.prototype, tableMethods);
+
 // ---------- helpers ----------
 
-const trim = (s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
+const trim =(s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
 
 const svg = (body) =>
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">${body}</svg>`;

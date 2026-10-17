@@ -1,19 +1,37 @@
 // Inline formatting for item text (Dynalist style): `code`, **bold**,
-// __italic__, [link text](url) and bare links.
+// __italic__, ~~strikethrough~~, ==highlight==, [link text](url), bare links,
+// and image links: ![caption](url) or !https://… (preview pops up on hover).
 //
 // The produced HTML always has exactly the raw text as its textContent: the
 // markup characters are kept in <span class="md"> elements that CSS hides
 // unless the item is being edited. That way caret offsets mean the same thing
 // whether or not an item is formatted, and editing never has to swap DOM.
 
-const RE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|\[([^\]\n]+)\]\(([^\s()]+)\)|(https?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]'"])/g;
+const URL_RE = String.raw`https?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]'"]`;
+const RE = new RegExp(
+  [
+    String.raw`!\[([^\]\n]*)\]\(([^\s()]+)\)`, // 1,2  ![caption](url)
+    `!(${URL_RE})`, //                           3    !https://…
+    '(`[^`\\n]+`)', //                           4    `code`
+    String.raw`(\*\*[^*\n]+\*\*)`, //            5    **bold**
+    '(__[^_\\n]+__)', //                         6    __italic__
+    '(~~[^~\\n]+~~)', //                         7    ~~strike~~
+    '(==[^=\\n]+==)', //                         8    ==highlight==
+    String.raw`\[([^\]\n]+)\]\(([^\s()]+)\)`, // 9,10 [text](url)
+    `(${URL_RE})`, //                            11   https://…
+  ].join('|'),
+  'g',
+);
 
 // Links without a scheme ("example.com") open as https.
 export const linkHref = (url) => (/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : 'https://' + url);
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 export const esc = (s) => s.replace(/[&<>"]/g, (c) => ESC[c]);
-const md = (s) => `<span class="md">${s}</span>`;
+const md = (s) => `<span class="md">${esc(s)}</span>`;
+const link = (href, inner, img = false) =>
+  `<span class="link${img ? ' img' : ''}" data-href="${esc(href)}">${inner}</span>`;
+const wrap = (mark, tag, s) => md(mark) + `<${tag}>${esc(s.slice(mark.length, -mark.length))}</${tag}>` + md(mark);
 
 export function format(text) {
   if (!text) return '';
@@ -21,12 +39,16 @@ export function format(text) {
   let last = 0;
   for (const m of text.matchAll(RE)) {
     out += esc(text.slice(last, m.index));
-    const [s, code, bold, ital, label, target, url] = m;
-    if (code) out += md('`') + `<code>${esc(code.slice(1, -1))}</code>` + md('`');
-    else if (bold) out += md('**') + `<b>${esc(bold.slice(2, -2))}</b>` + md('**');
-    else if (ital) out += md('__') + `<i>${esc(ital.slice(2, -2))}</i>` + md('__');
-    else if (label) out += md('[') + `<span class="link" data-href="${esc(linkHref(target))}">${esc(label)}</span>` + md(`](${esc(target)})`);
-    else if (url) out += `<span class="link" data-href="${esc(url)}">${esc(url)}</span>`;
+    const [s, imgCap, imgUrl, imgBare, code, bold, ital, strike, high, label, target, url] = m;
+    if (imgUrl !== undefined) out += md('![') + link(linkHref(imgUrl), esc(imgCap), true) + md(`](${imgUrl})`);
+    else if (imgBare) out += md('!') + link(imgBare, esc(imgBare), true);
+    else if (code) out += md('`') + `<code>${esc(code.slice(1, -1))}</code>` + md('`');
+    else if (bold) out += wrap('**', 'b', bold);
+    else if (ital) out += wrap('__', 'i', ital);
+    else if (strike) out += wrap('~~', 's', strike);
+    else if (high) out += wrap('==', 'mark', high);
+    else if (label) out += md('[') + link(linkHref(target), esc(label)) + md(`](${target})`);
+    else if (url) out += link(url, esc(url));
     last = m.index + s.length;
   }
   return out + esc(text.slice(last));
