@@ -81,7 +81,7 @@ export class UI {
       : this.query
         ? `<p class="empty">No matches.</p>`
         : // Nothing here yet: an empty first line that becomes real when focused.
-          `<div class="list"><div class="item" data-item=""><div class="row"><span class="toggle"></span>` +
+          `<div class="list"><div class="item" data-item=""><div class="row"><span class="zoom"></span>` +
           `<span class="bullet"></span><div class="text" contenteditable="plaintext-only" spellcheck="true" data-id="" data-new="${this.zoom}|"></div></div></div></div>`;
     this.main.innerHTML = html;
     this.renderCrumbs();
@@ -104,8 +104,7 @@ export class UI {
       return (
         `<div class="item table-item${n.d ? ' done' : ''}" data-item="${n.id}">` +
         `<div class="row${n.h ? ` h${n.h}` : ''}">` +
-        `<span class="toggle ${open ? 'open' : 'closed'}" aria-hidden="true"></span>` +
-        `<span class="bullet${open ? '' : ' folded'}" title="Click to zoom, drag to move"></span>` +
+        marker(true, open) +
         `<div class="text${colorClass(n)}" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}" data-placeholder="Table">${format(n.t)}</div>` +
         `</div>` + (open ? this.renderTable(n) : '') + `</div>`
       );
@@ -117,8 +116,7 @@ export class UI {
     return (
       `<div class="item${n.d ? ' done' : ''}" data-item="${n.id}">` +
       `<div class="row${n.h ? ` h${n.h}` : ''}">` +
-      `<span class="toggle${has ? (open ? ' open' : ' closed') : ''}" aria-hidden="true"></span>` +
-      `<span class="bullet${has && !open ? ' folded' : ''}" title="Click to zoom, drag to move"></span>` +
+      marker(has, open) +
       `<div class="text${colorClass(n)}" contenteditable="plaintext-only" spellcheck="true" data-id="${n.id}">${format(n.t)}</div>` +
       `</div>` +
       (inner ? `<div class="children">${inner}</div>` : '') +
@@ -720,17 +718,16 @@ export class UI {
   }
 
   // Copy a document, folder or item (with everything under it) right after
-  // the original. Documents and folders get " (copy)" added to the name.
+  // the original, under the same name.
   duplicate(id) {
     const n = this.o.get(id);
     if (!n || n.id === ROOT || this.o.isCell(id) || this.o.isRow(id)) return;
     if (this.o.isDoc(id) || n.f) {
       this.checkpoint();
-      const name = (n.t || (n.f ? 'Untitled folder' : 'Untitled')) + ' (copy)';
-      this.o.copySubtree(id, n.p, id, { t: name });
+      this.o.copySubtree(id, n.p, id);
       this.onChange();
       this.render();
-      this.toast(`Duplicated as “${name}”`);
+      this.toast(`Duplicated “${n.t || 'Untitled'}”`);
       return;
     }
     this.op(() => {
@@ -871,10 +868,11 @@ export class UI {
       }
       const row = t.closest('.row');
       const id = row && row.closest('.item').dataset.item;
-      if (t.classList.contains('toggle') && id) {
-        if (this.o.hasChildren(id)) this.setCollapsed(id, !this.o.get(id).c);
-      } else if (t.classList.contains('bullet') && id) {
+      if (!id) return;
+      if (t.closest('.zoom')) {
         this.zoomTo(id);
+      } else if (t.classList.contains('bullet') && t.classList.contains('kids')) {
+        this.setCollapsed(id, !this.o.get(id).c); // triangle: collapse / expand
       }
     });
 
@@ -1265,6 +1263,18 @@ const trim =(s) => (s.length > 40 ? s.slice(0, 40) + '…' : s);
 
 const svg = (body) =>
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">${body}</svg>`;
+// The two icons left of a line's text: a zoom magnifier that appears on
+// hover, then the line's marker — a dot, or a triangle when the line has
+// children (click to collapse/expand). Either marker can be dragged.
+const ZOOM_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.2 15.2L21 21M10.5 7.5v6M7.5 10.5h6"/></svg>';
+function marker(hasKids, open) {
+  const title = hasKids ? 'Click to collapse or expand, drag to move' : 'Drag to move';
+  return (
+    `<span class="zoom" title="Zoom in (Alt+→)">${ZOOM_ICON}</span>` +
+    `<span class="bullet${hasKids ? (open ? ' kids open' : ' kids') : ''}" title="${title}"></span>`
+  );
+}
+
 // Page with a folded top-right corner.
 const ICON_DOC = svg('<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/>');
 const ICON_FOLDER = svg('<path d="M1.5 3.5h4.5l1.5 1.5h7v8.5h-13z"/>');

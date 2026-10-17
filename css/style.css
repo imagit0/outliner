@@ -247,25 +247,36 @@ main {
 .row.h1 > .text { font-size: 1.55em; font-weight: 700; }
 .row.h2 > .text { font-size: 1.3em; font-weight: 700; }
 .row.h3 > .text { font-size: 1.12em; font-weight: 700; }
-.toggle {
-  flex: none; width: 18px; height: calc(var(--lh) + 2 * var(--pad)); position: relative; cursor: pointer;
-  color: var(--muted); opacity: 0;
+/* Zoom magnifier: shown when hovering the line (no hover on phones; the
+   toolbar has a zoom button there). */
+.zoom {
+  flex: none; width: 18px; height: calc(var(--lh) + 2 * var(--pad));
+  display: flex; align-items: flex-start; justify-content: center; padding-top: calc(var(--pad) + var(--lh) / 2 - 7px);
+  color: var(--muted); cursor: pointer; opacity: 0;
 }
-.toggle.open::before, .toggle.closed::before {
-  content: ""; position: absolute; left: 5px; top: calc(var(--pad) + var(--lh) / 2 - 5px);
-  border: 5px solid transparent; border-left: 7px solid currentColor; border-right: 0;
-  transition: transform .1s;
-}
-.toggle.open::before { transform: rotate(90deg); }
-.row:hover .toggle, .toggle.closed { opacity: 1; }
+.zoom svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.row:hover > .zoom { opacity: .75; }
+.zoom:hover { opacity: 1 !important; color: var(--fg); }
+@media (pointer: coarse) { .zoom { visibility: hidden; } }
+
+/* Line marker: a dot, or a triangle (right = collapsed, down = expanded) for
+   lines with children. Drag either one to move the line. */
 .bullet {
-  flex: none; width: 22px; height: calc(var(--lh) + 2 * var(--pad)); position: relative; cursor: pointer; border-radius: 50%;
+  flex: none; width: 22px; height: calc(var(--lh) + 2 * var(--pad)); position: relative; cursor: grab; border-radius: 50%;
 }
 .bullet::after {
   content: ""; position: absolute; left: 8px; top: calc(var(--pad) + var(--lh) / 2 - 3px);
   width: 6px; height: 6px; border-radius: 50%; background: var(--fg); opacity: .7;
 }
-.bullet.folded::before, .bullet:hover::before {
+.bullet.kids { cursor: pointer; }
+.bullet.kids::after {
+  left: 8px; top: calc(var(--pad) + var(--lh) / 2 - 5px);
+  width: 0; height: 0; border-radius: 0; background: none;
+  border-left: 7px solid var(--fg); border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  transition: transform .1s;
+}
+.bullet.kids.open::after { transform: rotate(90deg); }
+.bullet:hover::before {
   content: ""; position: absolute; left: 3px; top: calc(var(--pad) + var(--lh) / 2 - 8px);
   width: 16px; height: 16px; border-radius: 50%; background: var(--line);
 }
@@ -431,8 +442,6 @@ body.col-resizing { user-select: none; }
 .fb:active { background: var(--hover); }
 @media (pointer: coarse), (max-width: 600px) {
   body.editing #toolbar { display: flex; }
-  .toggle { opacity: 1; }
-  .toggle:not(.open):not(.closed) { opacity: 0; }
   #search { flex-basis: 120px; }
 }
 

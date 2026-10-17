@@ -11,7 +11,8 @@ No build step: plain HTML/CSS/ES modules.
 - Nested bullets: Enter, Tab / Shift+Tab, move, collapse, complete (strikethrough), hide completed
 - Line colors: Ctrl+1–6 (red, orange, yellow, green, blue, purple), Ctrl+0 to clear
 - Drag and drop: drag a bullet to move an item (long-press first on touch). Drop it on a sidebar document to move it there, or between documents to turn it into a document.
-- Zoom into any item (click its bullet), with breadcrumbs; the Android back button zooms back out
+- Each line has a dot, or a triangle if it has children (click it to collapse or expand); drag either one to move the line
+- Zoom into any item with the magnifier that appears when you hover a line (or Alt+→, or the toolbar's zoom button on phones). Breadcrumbs show where you are, and the Android back button zooms back out.
 - Search the current document, or all documents with the **All** button. All words must match; matching items are shown with their parents.
 - Inline `**bold**` (Ctrl+B), `__italic__` (Ctrl+I), `~~strikethrough~~` (Ctrl+T), `==highlight==` (Ctrl+H), `` `code` ``, `[text](url)` links (Ctrl+K) and plain web addresses (Dynalist syntax)
 - Image links: `![caption](url)` or `!https://…` show a preview on hover (tap on phones)
