@@ -36,7 +36,7 @@ export function merge(base, local, remote) {
     }
     const n = { ...b, m: Math.max(l.m || 0, r.m || 0) };
     const localNewer = (l.m || 0) >= (r.m || 0);
-    for (const group of [['p', 'k'], ['t'], ['d'], ['c'], ['cl'], ['f'], ['h'], ['tb'], ['cw'], ['hd']]) {
+    for (const group of [['p', 'k'], ['t'], ['d'], ['c'], ['cl'], ['f'], ['h'], ['tb'], ['cw'], ['hd'], ['nb']]) {
       const lc = changed(l, b, group), rc = changed(r, b, group);
       const src = lc && rc ? (localNewer ? l : r) : lc ? l : rc ? r : b;
       for (const f of group) n[f] = src[f];

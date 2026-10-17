@@ -1176,6 +1176,10 @@ export function getCaret(el) {
   return r.toString().length;
 }
 
+// A formatting marker (**, __, [](…)) that is hidden while editing.
+export const hiddenMarker = (node) =>
+  !document.body.classList.contains('show-md') && !!node.parentElement?.closest('.md');
+
 export function setCaret(el, offset) {
   const sel = getSelection();
   const r = document.createRange();
@@ -1183,6 +1187,12 @@ export function setCaret(el, offset) {
   let left = offset;
   let node;
   while ((node = walker.nextNode())) {
+    // Never put the caret inside a hidden marker: typing there would be
+    // invisible. Land just after it instead.
+    if (hiddenMarker(node) && left <= node.length) {
+      left = 0;
+      continue;
+    }
     if (left <= node.length) {
       r.setStart(node, left);
       r.collapse(true);

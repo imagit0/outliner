@@ -7,6 +7,7 @@
 //   table="true"         this outline is a table; its child outlines are the
 //                        rows and their children are the cells
 //   tableHeader="true"   the table's first row is a header
+//   tableBorders="false" the table is drawn without cell borders
 //   colWidths="120,,80"  column widths in px (empty = automatic)
 //   collapsed="true"     collapsed
 // Other outliners simply show a table as caption → rows → cells. Dynalist's
@@ -36,6 +37,7 @@ export function exportOPML(outline, rootId) {
       if (n.tb) {
         a += ' table="true"';
         if (n.hd) a += ' tableHeader="true"';
+        if (n.nb) a += ' tableBorders="false"';
         if (n.cw) a += ` colWidths="${attrEsc(n.cw)}"`;
       }
       const pad = '  '.repeat(depth);
@@ -81,6 +83,7 @@ export function parseOPML(text) {
     if (isTable) {
       fields.tb = true;
       if (flag(el, 'tableHeader')) fields.hd = true;
+      if (/^(false|0|no)$/i.test(el.getAttribute('tableBorders') || '')) fields.nb = true;
       if (el.getAttribute('colWidths')) fields.cw = el.getAttribute('colWidths');
     }
     const children = [...el.children].filter((c) => c.tagName === 'outline').map(convert);

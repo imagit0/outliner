@@ -18,6 +18,7 @@
 //   tb  table (bool): its children are rows, the rows' children are cells
 //   cw  table column widths in px, comma-separated ("120,,80"; empty = auto)
 //   hd  table has a header row (bool)
+//   nb  table drawn without cell borders (bool)
 //   m   last-modified time in ms (used to break merge ties)
 //
 // The sidebar tree is made of folders and documents: a folder (f) lives under
@@ -246,10 +247,10 @@ export function cmpNode(a, b) {
   return a.k < b.k ? -1 : a.k > b.k ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl', 'f', 'h', 'tb', 'cw', 'hd'];
+export const FIELDS = ['p', 'k', 't', 'd', 'c', 'cl', 'f', 'h', 'tb', 'cw', 'hd', 'nb'];
 
 // Missing optional fields (older nodes lack them) count as their default.
-const DEFAULTS = { cl: 0, f: false, h: 0, tb: false, cw: '', hd: false };
+const DEFAULTS = { cl: 0, f: false, h: 0, tb: false, cw: '', hd: false, nb: false };
 const norm = (f, v) => (v === undefined && f in DEFAULTS ? DEFAULTS[f] : v);
 
 export function sameNode(a, b) {

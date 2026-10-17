@@ -9,6 +9,7 @@
 // These methods are mixed into UI (see the bottom of ui.js).
 
 import { format } from './format.js';
+import { hiddenMarker } from './ui.js';
 
 const lastChildId = (o, pid) => {
   const k = o.children(pid);
@@ -22,7 +23,7 @@ export const tableMethods = {
     const rows = this.o.children(t.id);
     const cols = Math.max(1, ...rows.map((r) => this.o.children(r.id).length));
     const widths = colWidths(t);
-    let html = `<div class="table-wrap"><table class="tbl${t.hd ? ' hd' : ''}" data-table="${t.id}"><colgroup>`;
+    let html = `<div class="table-wrap"><table class="tbl${t.hd ? ' hd' : ''}${t.nb ? ' nb' : ''}" data-table="${t.id}"><colgroup>`;
     for (let i = 0; i < cols; i++) html += widths[i] ? `<col style="width:${widths[i]}px">` : `<col>`;
     html += `</colgroup>`;
     for (const r of rows) {
@@ -224,11 +225,12 @@ export const tableMethods = {
     });
   },
 
-  toggleHeader(id) {
+  // Toggle a table flag: hd (header row) or nb (no cell borders).
+  toggleTableFlag(id, flag) {
     const { table } = this.cellPos(id);
     const off = this.caretOf(id);
     this.op(() => {
-      this.o.update(table.id, { hd: !table.hd });
+      this.o.update(table.id, { [flag]: !table[flag] });
       return { id, off };
     });
   },
@@ -320,7 +322,8 @@ export const tableMethods = {
       case 'del-row': return this.delRow(id);
       case 'del-col': return this.delCol(id);
       case 'del-table': return this.deleteTable(this.cellPos(id).table.id);
-      case 'header': return this.toggleHeader(id);
+      case 'header': return this.toggleTableFlag(id, 'hd');
+      case 'borders': return this.toggleTableFlag(id, 'nb');
     }
   },
 };
@@ -338,6 +341,7 @@ function setCaretEnd(el, off) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let left = target, node;
   while ((node = walker.nextNode())) {
+    if (hiddenMarker(node) && left <= node.length) { left = 0; continue; }
     if (left <= node.length) {
       r.setStart(node, left);
       r.collapse(true);

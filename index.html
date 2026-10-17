@@ -107,6 +107,7 @@
     <button type="button" tabindex="-1" data-tcmd="del-row" title="Delete row (Ctrl+Shift+Backspace)">− Row</button>
     <button type="button" tabindex="-1" data-tcmd="del-col" title="Delete column">− Col</button>
     <button type="button" tabindex="-1" data-tcmd="header" title="Toggle header row">Header</button>
+    <button type="button" tabindex="-1" data-tcmd="borders" title="Toggle cell borders">Borders</button>
     <button type="button" tabindex="-1" data-tcmd="del-table" title="Delete table">🗑</button>
   </div>
 
@@ -139,6 +140,7 @@
       <tr><td>Ctrl+Shift+Backspace</td><td>Delete item (with everything under it)</td></tr>
       <tr><td>Ctrl+Shift+M</td><td>Move item to another document</td></tr>
       <tr><td>Ctrl+,</td><td>Settings</td></tr>
+      <tr><td>Ctrl+M</td><td>Show / hide formatting characters (**, __, [](…)) while editing</td></tr>
       <tr><td>Ctrl+Alt+T</td><td>Insert table</td></tr>
       <tr><td colspan="2"><b>In a table</b></td></tr>
       <tr><td>Tab / Shift+Tab</td><td>Next / previous cell (Tab in the last cell adds a row)</td></tr>
@@ -177,6 +179,9 @@
     </label>
     <label class="field">Text size
       <select id="set-size"></select>
+    </label>
+    <label class="field">Show formatting characters while editing (Ctrl+M)
+      <input id="set-md" type="checkbox">
     </label>
     <p id="font-sample" class="sample">The quick brown fox jumps over the lazy dog. 0123456789</p>
     <button id="settings-close" type="button">Done</button>

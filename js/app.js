@@ -9,7 +9,7 @@ import { exportOPML, parseOPML, insertItems } from './opml.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, ...load('prefs', {}) };
 const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 // ---------- appearance (theme + font) ----------
@@ -31,6 +31,7 @@ function applyAppearance() {
   root.dataset.theme = prefs.theme;
   root.style.setProperty('--font', (FONTS[prefs.font] || FONTS.arial)[1]);
   root.style.setProperty('--fs', `${prefs.size}px`);
+  document.body.classList.toggle('show-md', !!prefs.showMd);
   // Match the browser/OS chrome (Android status bar, installed-app title bar).
   requestAnimationFrame(() => {
     $('#theme-color').content = getComputedStyle(document.body).backgroundColor;
@@ -212,12 +213,21 @@ for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-
     applyAppearance();
   });
 }
+$('#set-md').addEventListener('change', (e) => setShowMd(e.target.checked));
 $('#settings-close').addEventListener('click', () => $('#settings').close());
+
+function setShowMd(on) {
+  prefs.showMd = on;
+  save('prefs', prefs);
+  applyAppearance();
+  $('#set-md').checked = on;
+}
 
 function openSettings() {
   $('#set-theme').value = prefs.theme;
   $('#set-font').value = prefs.font;
   $('#set-size').value = String(prefs.size);
+  $('#set-md').checked = !!prefs.showMd;
   if (!$('#settings').open) $('#settings').showModal();
 }
 
@@ -262,6 +272,10 @@ document.addEventListener('keydown', (e) => {
   } else if (e.code === 'Comma') {
     e.preventDefault();
     openSettings();
+  } else if (e.code === 'KeyM') {
+    e.preventDefault();
+    setShowMd(!prefs.showMd);
+    ui.toast(prefs.showMd ? 'Formatting characters shown while editing' : 'Formatting characters hidden');
   }
 });
 $('#sync').addEventListener('click', syncNow);
