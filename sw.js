@@ -1,8 +1,10 @@
 // Service worker: makes the app load offline.
 // Network-first for our own files (so updates show up immediately when
 // online), falling back to the cache. Dropbox requests are not touched.
+// The network fetch revalidates with the server ("no-cache") instead of
+// trusting the browser's HTTP cache, which GitHub Pages sets to 10 minutes.
 
-const CACHE = 'outliner-v9';
+const CACHE = 'outliner-v10';
 const SHELL = [
   './',
   'index.html',
@@ -41,7 +43,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(req)
+    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
