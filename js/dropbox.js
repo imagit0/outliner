@@ -144,6 +144,43 @@ export async function getRev(path) {
   }
 }
 
+// ---- plain files (backups) ----
+
+// Write a file. overwrite=false fails with ConflictError if it exists.
+export async function putFile(path, text, overwrite = false) {
+  const arg = { path, mode: { '.tag': overwrite ? 'overwrite' : 'add' }, autorename: false, mute: true };
+  const res = await call(`${CONTENT}/files/upload`, { 'Dropbox-API-Arg': apiArg(arg), 'Content-Type': 'application/octet-stream' }, text);
+  if (res.status === 409) {
+    const err = await res.json().catch(() => ({}));
+    if (String(err.error_summary || '').includes('conflict')) throw new ConflictError(err.error_summary);
+    throw new Error(`upload: ${err.error_summary || 409}`);
+  }
+  if (!res.ok) throw new Error(`upload ${res.status}`);
+  return res.json();
+}
+
+// Files in a folder (not recursive): [{ name, path_lower, ... }]. Empty if
+// the folder doesn't exist yet.
+export async function listFiles(path) {
+  let page;
+  try {
+    page = await rpc('files/list_folder', { path, recursive: false });
+  } catch (e) {
+    if (e.summary && e.summary.startsWith('path/not_found')) return [];
+    throw e;
+  }
+  const entries = [...page.entries];
+  while (page.has_more) {
+    page = await rpc('files/list_folder/continue', { cursor: page.cursor });
+    entries.push(...page.entries);
+  }
+  return entries.filter((e) => e['.tag'] === 'file');
+}
+
+export async function deleteFile(path) {
+  await rpc('files/delete_v2', { path });
+}
+
 // ---- change notifications ----
 // A cursor marks a point in the app folder's history; longpoll() holds the
 // request open until something changes after it (or the timeout passes).

@@ -50,6 +50,8 @@ When sync runs:
 - **Other times:** when the app is opened or brought back to the foreground, when the device comes back online, and once a minute as a fallback.
 - **On demand:** Ctrl+S, tapping the sync icon, or ☰ → Sync now.
 
+**Daily backups:** after the first successful sync each day (on whichever device gets there first), the app saves a dated copy to `Apps/<app name>/backups/outline-YYYY-MM-DD.json` and deletes copies older than the chosen number of days. The default is 30 days; Settings has Off, 7, 30, 90 and 365 days, and Keep all. ⋮ → **Back up now** makes or replaces today's copy. To restore, download a backup file from Dropbox and use ⋮ → **Import backup**. Backups only happen when the app is opened (web apps can't run in the background).
+
 Most checks only ask Dropbox for the file's revision. The full file is downloaded only when another device has changed it. Dropbox also keeps 30 days of file history for `outline.json`.
 
 ## One-time setup

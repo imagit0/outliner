@@ -41,6 +41,7 @@
     <div id="m-status" class="status"></div>
     <button id="m-connect" type="button">Connect Dropbox</button>
     <button id="m-sync" type="button">Sync now</button>
+    <button id="m-backup" type="button">Back up now</button>
     <button id="m-done" type="button">Hide completed</button>
     <hr>
     <button id="m-export" type="button">Export backup (.json)</button>
@@ -194,6 +195,16 @@
         <option value="normal">Normal</option>
         <option value="relaxed">Relaxed</option>
         <option value="spacious">Spacious</option>
+      </select>
+    </label>
+    <label class="field">Daily backup to Dropbox
+      <select id="set-backup">
+        <option value="0">Off</option>
+        <option value="7">Keep 7 days</option>
+        <option value="30">Keep 30 days</option>
+        <option value="90">Keep 90 days</option>
+        <option value="365">Keep 1 year</option>
+        <option value="-1">Keep all</option>
       </select>
     </label>
     <label class="field">Show formatting characters while editing (Ctrl+M)

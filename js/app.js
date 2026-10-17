@@ -6,10 +6,11 @@ import { Sync } from './sync.js';
 import * as dropbox from './dropbox.js';
 import { load, save, requestPersistence } from './store.js';
 import { exportOPML, parseOPML, insertItems } from './opml.js';
+import { backup } from './backup.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, ...load('prefs', {}) };
 const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 // ---------- appearance (theme + font) ----------
@@ -100,6 +101,26 @@ function setStatus(state, detail = '') {
   el.dataset.state = state;
   el.title = detail ? `${label}: ${detail}` : label;
   renderMenu();
+  if (state === 'ok') runBackup();
+}
+
+// ---------- daily backup ----------
+// After a successful sync, back up the synced outline once a day.
+let backingUp = false;
+async function runBackup(force = false) {
+  if (backingUp) return;
+  const nodes = load('base');
+  if (!nodes) return;
+  backingUp = true;
+  try {
+    const r = await backup(nodes, prefs.backupKeep, force);
+    if (force) ui.toast(r === 'off' ? 'Backups are turned off in Settings' : 'Backup saved to Dropbox (Apps/ronliner/backups)');
+  } catch (e) {
+    console.warn('backup failed', e);
+    if (force) ui.toast(`Backup failed: ${e.message}`);
+  } finally {
+    backingUp = false;
+  }
 }
 
 // ---------- menu ----------
@@ -110,6 +131,7 @@ function renderMenu() {
   $('#m-connect').hidden = connected;
   $('#m-disconnect').hidden = !connected;
   $('#m-sync').hidden = !connected;
+  $('#m-backup').hidden = !connected;
   $('#m-done').textContent = prefs.showDone ? 'Hide completed' : 'Show completed';
   $('#m-status').textContent = !dropbox.isConfigured()
     ? 'Dropbox app key not set (see README)'
@@ -141,6 +163,10 @@ menu.addEventListener('click', async (e) => {
       return sync.forget();
     case 'm-sync':
       return syncNow();
+    case 'm-backup':
+      if (!dropbox.isConnected()) return alert('Connect Dropbox first; backups are stored there.');
+      if (sync.dirty) await sync.run(); // back up the latest edits
+      return runBackup(true);
     case 'm-done':
       prefs.showDone = !prefs.showDone;
       save('prefs', prefs);
@@ -218,9 +244,9 @@ $('#set-font').innerHTML = Object.entries(FONTS)
   .map(([k, [label, stack]]) => `<option value="${k}" style='font-family:${stack}'>${label}</option>`)
   .join('');
 $('#set-size').innerHTML = SIZES.map((s) => `<option value="${s}">${s}${s === 17 ? ' (default)' : ''}</option>`).join('');
-for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-size', 'size'], ['#set-spacing', 'spacing']]) {
+for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-size', 'size'], ['#set-spacing', 'spacing'], ['#set-backup', 'backupKeep']]) {
   $(id).addEventListener('change', (e) => {
-    prefs[key] = key === 'size' ? Number(e.target.value) : e.target.value;
+    prefs[key] = key === 'size' || key === 'backupKeep' ? Number(e.target.value) : e.target.value;
     save('prefs', prefs);
     applyAppearance();
   });
@@ -240,6 +266,7 @@ function openSettings() {
   $('#set-font').value = prefs.font;
   $('#set-size').value = String(prefs.size);
   $('#set-spacing').value = prefs.spacing || 'auto';
+  $('#set-backup').value = String(prefs.backupKeep);
   $('#set-md').checked = !!prefs.showMd;
   if (!$('#settings').open) $('#settings').showModal();
 }
