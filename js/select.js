@@ -85,7 +85,15 @@ export const selectMethods = {
     const ids = this.lineIds();
     const a = ids.indexOf(anchor), b = ids.indexOf(focus);
     if (a < 0 || b < 0) return;
-    this.lineSel = { anchor, focus, ids: ids.slice(Math.min(a, b), Math.max(a, b) + 1) };
+    // A selected line always brings its children (that's what copy, delete
+    // etc. act on), so stretch the range over the children of every line in
+    // it. Children come right after their parent in display order.
+    const lo = Math.min(a, b);
+    let hi = Math.max(a, b);
+    for (let i = lo; i <= hi; i++) {
+      while (hi + 1 < ids.length && this.o.isAncestor(ids[i], ids[hi + 1])) hi++;
+    }
+    this.lineSel = { anchor, focus, ids: ids.slice(lo, hi + 1) };
     this.paintLineSelection();
   },
 
