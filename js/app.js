@@ -8,7 +8,8 @@ import { load, save, requestPersistence } from './store.js';
 import { exportOPML, importFiles, droppedFiles } from './opml.js';
 import { backup } from './backup.js';
 import { setInlineImages } from './format.js';
-import { LocalStore } from './local.js';
+import { LocalStore, takeNewerSynced } from './local.js';
+import { idbKV } from './idb.js';
 import { gunzip, isGzip } from './shards.js';
 
 const $ = (s) => document.querySelector(s);
@@ -100,6 +101,19 @@ const sync = new Sync({
   onStatus: setStatus,
 });
 await sync.init();
+
+// One-time repair (see takeNewerSynced): bring back synced edits that the
+// device failed to save before the 2026-10-19 fix.
+if (!(await idbKV.get('repair:stale-local'))) {
+  const fixed = takeNewerSynced(outline.nodes, sync.baseNodes());
+  if (fixed) {
+    outline.invalidate();
+    persistNow();
+    ui.render();
+    console.info(`restored ${fixed} line(s) from the last synced version`);
+  }
+  await idbKV.put('repair:stale-local', true);
+}
 
 // ---------- sync status ----------
 const STATUS = {

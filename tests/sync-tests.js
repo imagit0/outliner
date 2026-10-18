@@ -4,12 +4,12 @@
 import { Outline, ROOT, sameNodes } from '../js/model.js';
 import { Sync } from '../js/sync.js';
 import { memoryKV } from '../js/idb.js';
-import { LocalStore } from '../js/local.js';
+import { LocalStore, takeNewerSynced } from '../js/local.js';
 import { split, join, pack, unpack, gzip, gunzip, shardMap, INDEX } from '../js/shards.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-function fakeDropbox() {
+export function fakeDropbox() {
   class ConflictError extends Error {}
   class ResetError extends Error {}
   class AuthError extends Error {}
@@ -75,15 +75,16 @@ function fakeDropbox() {
 }
 
 // A device: its own outline, its own storage, sharing the fake Dropbox.
-async function device(server, nodes) {
+// Pass the kv of an earlier device (and its nodes) to simulate a reload.
+export async function device(server, nodes, kv = memoryKV()) {
   const o = new Outline(structuredClone(nodes));
-  const dev = { o, status: '' };
+  const dev = { o, status: '', kv };
   dev.s = new Sync({
     getNodes: () => o.nodes,
     replaceNodes: (n) => { o.nodes = n; o.invalidate(); },
     onStatus: (st, d) => { dev.status = st + (d ? ': ' + d : ''); },
     remote: server.api,
-    kv: memoryKV(),
+    kv,
   });
   dev.s.schedule = () => {}; // tests drive syncs explicitly
   await dev.s.init();
@@ -280,6 +281,37 @@ export function syncTests(test, { eq, ok }) {
     eq([server.stats.up, server.stats.down], [0, 0]);
     eq(server.stats.lists, 1);
   }));
+
+  test('local storage: edits to lines loaded at startup are saved (reorder, text)', async () => {
+    const kv = memoryKV();
+    const { nodes, todo } = sample();
+    await new LocalStore(kv).save(nodes);
+    // "Reload": load, then edit existing nodes in place, as the app does.
+    const store = new LocalStore(kv);
+    const o = new Outline(await store.load());
+    const [first, second] = o.children(todo);
+    o.move(second.id, todo, null); // reorder
+    o.update(first.id, { t: 'edited after reload' });
+    const docs = o.children(ROOT);
+    o.move(docs[docs.length - 1].id, ROOT, null); // reorder documents
+    await store.save(o.nodes);
+    const again = await new LocalStore(kv).load();
+    ok(sameNodes(again, o.nodes), 'saved after reload');
+    eq(again[first.id].t, 'edited after reload');
+  });
+
+  test('repair: stale device copy takes the newer synced version', () => {
+    const { nodes, todo } = sample();
+    const local = structuredClone(nodes);
+    const synced = structuredClone(nodes);
+    const id = Object.values(synced).find((n) => n.p === todo).id;
+    synced[id] = { ...synced[id], t: 'synced edit', m: synced[id].m + 1000 };
+    const mine = Object.values(local).find((n) => n.p === todo && n.id !== id).id;
+    local[mine] = { ...local[mine], t: 'unsynced local edit', m: local[mine].m + 2000 };
+    eq(takeNewerSynced(local, synced), 1);
+    eq(local[id].t, 'synced edit', 'stale line updated');
+    eq(local[mine].t, 'unsynced local edit', 'newer local edit kept');
+  });
 
   test('local storage: one record per document, saves only what changed', async () => {
     const kv = memoryKV();

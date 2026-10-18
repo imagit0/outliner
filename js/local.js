@@ -3,9 +3,25 @@
 
 import { idbKV } from './idb.js';
 import { split, join } from './shards.js';
-import { sameNodes } from './model.js';
+import { sameNodes, sameNode } from './model.js';
 
 const P = 'local:';
+
+// Repair for a bug (fixed 2026-10-19): edits to lines loaded at startup were
+// not saved on the device, though they did sync. So the device's copy of such
+// a line can be older than the last synced one; take the synced version
+// wherever it is newer. Returns how many lines were updated.
+export function takeNewerSynced(nodes, synced) {
+  let n = 0;
+  for (const [id, b] of Object.entries(synced)) {
+    const l = nodes[id];
+    if (l && (b.m || 0) > (l.m || 0) && !sameNode(l, b)) {
+      nodes[id] = structuredClone(b);
+      n++;
+    }
+  }
+  return n;
+}
 
 export class LocalStore {
   constructor(kv = idbKV) {
@@ -19,7 +35,9 @@ export class LocalStore {
     const entries = await this.kv.entries(P);
     if (!entries.length) return null;
     for (const [k, v] of entries) this.saved[k.slice(P.length)] = v;
-    return join(this.saved);
+    // A separate copy: the outline edits its nodes in place, and `saved` must
+    // keep what's on disk or edits would look unchanged and never be written.
+    return structuredClone(join(this.saved));
   }
 
   // Save (serialized, so overlapping saves can't interleave).
