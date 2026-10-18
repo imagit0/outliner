@@ -129,8 +129,11 @@
       <tr><th colspan="2">Editing</th></tr>
       <tr><td>New item (splits at the cursor)</td><td>Enter</td></tr>
       <tr><td>Indent / outdent</td><td>Tab / Shift+Tab</td></tr>
+      <tr><td>Outdent but keep the line in place (the lines below it become its children)</td><td>Ctrl+Shift+Tab</td></tr>
       <tr><td>Join with the item above (deletes it if empty)</td><td>Backspace at start</td></tr>
       <tr><td>Delete item (with everything under it)</td><td>Ctrl+Shift+Backspace</td></tr>
+      <tr><td>Duplicate item (in a table: duplicate the row)</td><td>Ctrl+D</td></tr>
+      <tr><td>Select several lines (then Delete, Ctrl+C / X, Tab, Ctrl+0–6, Ctrl+D…)</td><td>Drag across lines<br>or Shift+click</td></tr>
       <tr><td>Mark complete</td><td>Ctrl+Enter</td></tr>
       <tr><td>Undo / redo</td><td>Ctrl+Z / Ctrl+Y</td></tr>
       <tr><td>Stop editing</td><td>Esc</td></tr>
@@ -142,6 +145,8 @@
       <tr><td>Normal text</td><td>Ctrl+Alt+0</td></tr>
       <tr><td>Bold / italic (wraps the selection; they stack)</td><td>Ctrl+B / Ctrl+I</td></tr>
       <tr><td>Highlight / strikethrough</td><td>Ctrl+H / Ctrl+T</td></tr>
+      <tr><td>Code</td><td>Ctrl+`</td></tr>
+      <tr><td>Linked images: preview on hover ↔ show inline</td><td>Ctrl+Shift+H</td></tr>
       <tr><td>Insert link (selected text becomes the link text)</td><td>Ctrl+K</td></tr>
       <tr><td>Show / hide formatting characters while editing</td><td>Ctrl+M</td></tr>
 
@@ -199,6 +204,12 @@
         <option value="normal">Normal</option>
         <option value="relaxed">Relaxed</option>
         <option value="spacious">Spacious</option>
+      </select>
+    </label>
+    <label class="field">Linked images (Ctrl+Shift+H)
+      <select id="set-images">
+        <option value="hover">Preview on hover</option>
+        <option value="inline">Show inline</option>
       </select>
     </label>
     <label class="field">Daily backup to Dropbox

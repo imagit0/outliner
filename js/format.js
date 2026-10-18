@@ -23,6 +23,15 @@ const RE = new RegExp(
   'g',
 );
 
+// Settings → Linked images: preview on hover (default) or show inline. When
+// inline, each image link is followed by the picture itself (an <img> has no
+// text, so the line's textContent is unchanged).
+let inlineImages = false;
+export function setInlineImages(on) { inlineImages = !!on; }
+export const isInlineImages = () => inlineImages;
+const inlineImg = (href) =>
+  inlineImages ? `<img class="inline-img" src="${esc(href)}" data-href="${esc(href)}" alt="" loading="lazy" draggable="false">` : '';
+
 // Links without a scheme ("example.com") open as https.
 export const linkHref = (url) => (/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : 'https://' + url);
 
@@ -42,8 +51,8 @@ export function format(text) {
     out += esc(text.slice(last, m.index));
     const [s, imgCap, imgUrl, imgBare, code, bold, ital, strike, high, label, target, url] = m;
     // Image links show as an "Image" chip; the URL is only visible while editing.
-    if (imgUrl !== undefined) out += md('![') + link(linkHref(imgUrl), esc(imgCap), ' img') + md(`](${imgUrl})`);
-    else if (imgBare) out += md('!') + link(imgBare, md(imgBare), ' img bare');
+    if (imgUrl !== undefined) out += md('![') + link(linkHref(imgUrl), esc(imgCap), ' img') + md(`](${imgUrl})`) + inlineImg(linkHref(imgUrl));
+    else if (imgBare) out += md('!') + link(imgBare, md(imgBare), ' img bare') + inlineImg(imgBare);
     else if (code) out += md('`') + `<code>${esc(code.slice(1, -1))}</code>` + md('`');
     else if (bold) out += wrap('**', 'b', bold);
     else if (ital) out += wrap('__', 'i', ital);

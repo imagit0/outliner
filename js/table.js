@@ -169,6 +169,17 @@ export const tableMethods = {
     });
   },
 
+  // Ctrl+D in a cell: copy the row below itself.
+  duplicateRow(id) {
+    const { rows, r, c } = this.cellPos(id);
+    const off = this.caretOf(id);
+    this.op(() => {
+      const copy = this.o.copySubtree(rows[r].id, rows[r].p, rows[r].id);
+      const cell = this.o.children(copy.id)[c];
+      return cell ? { id: cell.id, off } : null;
+    });
+  },
+
   delRow(id) {
     const { table, rows, r, c } = this.cellPos(id);
     if (rows.length === 1) return this.deleteTable(table.id);

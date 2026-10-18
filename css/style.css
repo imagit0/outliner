@@ -18,6 +18,7 @@
   --font: Arial, "Liberation Sans", Roboto, Helvetica, sans-serif;
   --fs: 17px; /* outline text size (Settings → Text size) */
   --mark: #fff2a8;
+  --sel: rgba(47, 111, 219, .16);
   --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   color-scheme: light;
 }
@@ -26,6 +27,7 @@
    the OS is in dark mode. */
 :root[data-theme="dark"] {
   --mark: rgba(255, 214, 0, .32);
+  --sel: rgba(110, 162, 255, .2);
   --bg: #1f2328;
   --fg: #e6e8eb;
   --muted: #8b939d;
@@ -47,6 +49,7 @@
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --mark: rgba(255, 214, 0, .32);
+    --sel: rgba(110, 162, 255, .2);
     --bg: #1f2328;
     --fg: #e6e8eb;
     --muted: #8b939d;
@@ -292,6 +295,10 @@ main {
 
 .item.done > .row > .text, .title.done { text-decoration: line-through; color: var(--muted); }
 
+/* Lines selected with the mouse (see select.js). */
+.row.selected { background: var(--sel); border-radius: 4px; }
+body.line-select #outline { user-select: none; -webkit-user-select: none; }
+
 /* color labels */
 .text.cl-1, .sw.cl-1 { background: var(--cl-1); }
 .text.cl-2, .sw.cl-2 { background: var(--cl-2); }
@@ -344,6 +351,11 @@ body.show-md .text:focus .link.img::before, body.show-md .text:focus .link.img::
 }
 .text mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
 .text s { color: var(--muted); }
+
+.inline-img {
+  display: block; max-width: min(100%, 480px); max-height: 320px; margin: 4px 0 6px;
+  border-radius: 6px; border: 1px solid var(--line); cursor: pointer;
+}
 
 #img-pop {
   position: fixed; z-index: 60; padding: 4px; cursor: pointer;

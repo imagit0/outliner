@@ -9,11 +9,12 @@
 // an item inside one (`zoom`); the sidebar lists the documents.
 
 import { ROOT } from './model.js';
-import { format, esc } from './format.js';
+import { format, esc, isInlineImages } from './format.js';
 import { load, save } from './store.js';
 import { Drag } from './drag.js';
 import { tableMethods } from './table.js';
 import { Menu } from './menu.js';
+import { selectMethods } from './select.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -86,6 +87,7 @@ export class UI {
     this.main.innerHTML = html;
     this.renderCrumbs();
     this.renderSidebar();
+    if (this.lineSel) this.paintLineSelection();
   }
 
   renderChildren(pid, visible) {
@@ -352,6 +354,23 @@ export class UI {
     });
   }
 
+  // Ctrl+Shift+Tab: outdent but keep the item's place in the list — the
+  // siblings that followed it become its children (after its own).
+  outdentKeep(id) {
+    const n = this.o.get(id);
+    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p) || this.o.isCell(id)) return;
+    const off = this.caretOf(id);
+    this.op(() => {
+      const parent = this.o.get(n.p);
+      const sibs = this.o.children(n.p);
+      const after = sibs.slice(sibs.indexOf(n) + 1);
+      this.o.move(id, parent.p, parent.id);
+      for (const s of after) this.o.move(s.id, id, lastChildId(this.o, id));
+      if (after.length && n.c) this.o.update(id, { c: false });
+      return { id, off };
+    });
+  }
+
   moveUp(id) {
     if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
@@ -443,21 +462,22 @@ export class UI {
   // next shortcut applies to it too.
   wrap(id, mark) {
     const [s, e] = this.selection(id);
+    const L = mark.length;
     this.op(() => {
       const t = this.o.get(id).t;
       // Markers directly around the selection, innermost first.
       const left = [], right = [];
-      for (let i = s; i >= 2 && STYLE_MARKS.includes(t.slice(i - 2, i)); i -= 2) left.push(i - 2);
-      for (let j = e; STYLE_MARKS.includes(t.slice(j, j + 2)); j += 2) right.push(j);
+      for (let i = s, m; (m = STYLE_MARKS.find((x) => i >= x.length && t.slice(i - x.length, i) === x)); i -= m.length) left.push({ at: i - m.length, m });
+      for (let j = e, m; (m = STYLE_MARKS.find((x) => t.slice(j, j + x.length) === x)); j += m.length) right.push({ at: j, m });
       for (let k = 0; k < Math.min(left.length, right.length); k++) {
-        if (t.slice(left[k], left[k] + 2) === mark && t.slice(right[k], right[k] + 2) === mark) {
-          const a = left[k], b = right[k];
-          this.o.update(id, { t: t.slice(0, a) + t.slice(a + 2, b) + t.slice(b + 2) });
-          return { id, off: s - 2, end: e - 2 };
+        if (left[k].m === mark && right[k].m === mark) {
+          const a = left[k].at, b = right[k].at;
+          this.o.update(id, { t: t.slice(0, a) + t.slice(a + L, b) + t.slice(b + L) });
+          return { id, off: s - L, end: e - L };
         }
       }
       this.o.update(id, { t: t.slice(0, s) + mark + t.slice(s, e) + mark + t.slice(e) });
-      return { id, off: s + 2, end: e + 2 };
+      return { id, off: s + L, end: e + L };
     });
   }
 
@@ -858,6 +878,7 @@ export class UI {
   bind() {
     const m = this.main;
     this.bindTableResize();
+    this.bindLineSelect();
 
     m.addEventListener('click', (e) => {
       const t = e.target;
@@ -882,7 +903,7 @@ export class UI {
       const link = e.target.closest('.link');
       if (!link || (this.isEditing(link) && !e.ctrlKey && !e.metaKey)) return;
       e.preventDefault();
-      if (link.classList.contains('img') && e.pointerType !== 'mouse') {
+      if (link.classList.contains('img') && e.pointerType !== 'mouse' && !isInlineImages()) {
         if (this.imgPop.hidden || this.imgPop.dataset.href !== link.dataset.href) this.showImage(link);
         else this.hideImage();
         return;
@@ -891,7 +912,14 @@ export class UI {
     });
     m.addEventListener('mouseover', (e) => {
       const link = e.target.closest('.link.img');
-      if (link) this.showImage(link);
+      if (link && !isInlineImages()) this.showImage(link);
+    });
+    // Clicking an inline image opens it (Ctrl/Cmd-click while editing).
+    m.addEventListener('pointerdown', (e) => {
+      const img = e.target.closest('.inline-img');
+      if (!img || (this.isEditing(img) && !e.ctrlKey && !e.metaKey)) return;
+      e.preventDefault();
+      window.open(img.dataset.href, '_blank', 'noopener');
     });
     m.addEventListener('mouseout', (e) => {
       const link = e.target.closest('.link.img');
@@ -1216,7 +1244,13 @@ export class UI {
       return this.setCollapsed(target, !this.o.get(target).c);
     }
     if (mod && e.altKey && !e.shiftKey && e.code === 'KeyT') { handled(); return this.insertTable(id); }
+    if (mod && e.shiftKey && key === 'Tab') { handled(); return this.outdentKeep(id); }
     if (key === 'Tab') { handled(); return e.shiftKey ? this.outdent(id) : this.indent(id); }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyD') {
+      handled();
+      return this.o.isCell(id) ? this.duplicateRow(id) : this.duplicate(id);
+    }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'Backquote') { handled(); return this.wrap(id, '`'); }
     if (mod && key === 'Enter') { handled(); return this.toggleDone(id); }
     if (mod && key.toLowerCase() === 'z') { handled(); return this.undo(e.shiftKey); }
     if (mod && key.toLowerCase() === 'y') { handled(); return this.undo(true); }
@@ -1255,7 +1289,7 @@ export class UI {
   }
 }
 
-Object.assign(UI.prototype, tableMethods);
+Object.assign(UI.prototype, tableMethods, selectMethods);
 
 // ---------- helpers ----------
 
@@ -1304,7 +1338,7 @@ export function getCaret(el) {
 export const hiddenMarker = (node) =>
   !document.body.classList.contains('show-md') && !!node.parentElement?.closest('.md');
 
-const STYLE_MARKS = ['**', '__', '~~', '=='];
+const STYLE_MARKS = ['**', '__', '~~', '==', '`'];
 
 // DOM position [node, offset] for a character offset in el. Never inside a
 // hidden marker (typing there would be invisible): such positions move to

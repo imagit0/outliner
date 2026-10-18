@@ -7,10 +7,12 @@ import * as dropbox from './dropbox.js';
 import { load, save, requestPersistence } from './store.js';
 import { exportOPML, parseOPML, insertItems } from './opml.js';
 import { backup } from './backup.js';
+import { setInlineImages } from './format.js';
 
 const $ = (s) => document.querySelector(s);
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, images: 'hover', ...load('prefs', {}) };
+setInlineImages(prefs.images === 'inline');
 const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
 // ---------- appearance (theme + font) ----------
@@ -251,6 +253,16 @@ for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-
 $('#set-md').addEventListener('change', (e) => setShowMd(e.target.checked));
 $('#settings-close').addEventListener('click', () => $('#settings').close());
 
+function setImageMode(mode) {
+  prefs.images = mode;
+  save('prefs', prefs);
+  setInlineImages(mode === 'inline');
+  $('#set-images').value = mode;
+  ui.hideImage();
+  ui.refresh();
+}
+$('#set-images').addEventListener('change', (e) => setImageMode(e.target.value));
+
 function setShowMd(on) {
   prefs.showMd = on;
   save('prefs', prefs);
@@ -264,6 +276,7 @@ function openSettings() {
   $('#set-size').value = String(prefs.size);
   $('#set-spacing').value = prefs.spacing || 'auto';
   $('#set-backup').value = String(prefs.backupKeep);
+  $('#set-images').value = prefs.images;
   $('#set-md').checked = !!prefs.showMd;
   if (!$('#settings').open) $('#settings').showModal();
 }
@@ -309,7 +322,16 @@ function syncNow() {
 // Ctrl+S (Cmd+S on Mac): sync now instead of the browser's "save page".
 // Ctrl+, : settings.
 document.addEventListener('keydown', (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.shiftKey) {
+    // Ctrl+Shift+H: linked images inline <-> preview on hover.
+    if (e.code === 'KeyH') {
+      e.preventDefault();
+      setImageMode(prefs.images === 'inline' ? 'hover' : 'inline');
+      ui.toast(prefs.images === 'inline' ? 'Images shown inline' : 'Images preview on hover');
+    }
+    return;
+  }
   if (e.key.toLowerCase() === 's') {
     e.preventDefault();
     syncNow();
