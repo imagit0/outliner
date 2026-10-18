@@ -14,21 +14,15 @@
 //      has, each conditional on the revision we know; if someone else wrote
 //      in between, start over
 // Edits made while a sync is in flight are kept by merging them on top.
-//
-// The first device to run this version moves the old single /outline.json
-// into the new layout and then deletes it. (Files that briefly lived under
-// /v2 are moved up to the root once, see tidyLayout.)
 
 import * as dropbox from './dropbox.js';
 import { idbKV } from './idb.js';
 import { merge } from './merge.js';
-import { parseDoc, sameNodes } from './model.js';
+import { sameNodes } from './model.js';
 import { load, save } from './store.js';
-import { DIR, OLD_DIR, split, join, shardPath, pathShard, pack, unpack, gzip, gunzip, isGzip } from './shards.js';
+import { DIR, split, join, shardPath, pathShard, pack, unpack, gzip, gunzip, isGzip } from './shards.js';
 
 const MAX_WAIT = 4000;
-const LEGACY = '/outline.json';
-const LEGACY_DONE = '/outline-before-split.json';
 const decoder = new TextDecoder();
 
 export class Sync {
@@ -100,9 +94,7 @@ export class Sync {
           cursor = page.cursor;
           // Our own uploads show up here too; only sync for someone else's.
           const foreign = page.entries.some((e) => {
-            const path = e.path_display || e.path_lower || '';
-            if (path.toLowerCase() === LEGACY) return true;
-            const s = pathShard(path);
+            const s = pathShard(e.path_display || e.path_lower || '');
             return s && (this.base[s]?.rev || null) !== (e.rev || null);
           });
           if (foreign) this.run();
@@ -154,7 +146,6 @@ export class Sync {
   }
 
   async once() {
-    await this.tidyLayout();
     const snap = structuredClone(this.getNodes());
     const R = this.remote;
 
@@ -181,10 +172,6 @@ export class Sync {
     }
     const changed = Object.keys(revs).filter((s) => (revs[s] || null) !== (this.base[s]?.rev || null));
 
-    // First run of this version: bring the old single file over.
-    let legacy = null;
-    if (!Object.keys(this.base).length && !Object.values(revs).some(Boolean)) legacy = await this.loadLegacy();
-
     // 2. Download what changed.
     const remoteShards = {};
     for (const [s, b] of Object.entries(this.base)) remoteShards[s] = b.nodes;
@@ -194,9 +181,9 @@ export class Sync {
       if (got) { remoteShards[s] = got.nodes; revs[s] = got.rev; } else { delete remoteShards[s]; revs[s] = null; }
     }
 
-    const remoteChanged = changed.length > 0 || !!legacy;
-    const base = legacy ? legacy.base : this.baseNodes();
-    const remoteNodes = legacy ? legacy.nodes : join(remoteShards);
+    const remoteChanged = changed.length > 0;
+    const base = this.baseNodes();
+    const remoteNodes = join(remoteShards);
     if (!remoteChanged && sameNodes(base, snap)) return this.saveCursor(listing);
 
     // 3. Merge. A brand-new device adopts the cloud copy instead of merging
@@ -210,11 +197,11 @@ export class Sync {
 
     // 4. Upload the files whose content differs from Dropbox's.
     const targetShards = split(target);
-    const onServer = legacy ? {} : remoteShards;
+    const onServer = remoteShards;
     const next = {};
     for (const s of new Set([...Object.keys(targetShards), ...Object.keys(onServer)])) {
       const t = targetShards[s] || {};
-      const rev = legacy ? null : revs[s] || null;
+      const rev = revs[s] || null;
       const empty = !Object.keys(t).length;
       if (sameNodes(t, onServer[s] || {})) {
         if (!empty) next[s] = { nodes: t, rev };
@@ -228,37 +215,6 @@ export class Sync {
     }
 
     await this.commit(next, listing);
-    if (legacy) await R.deleteRev(LEGACY, null); // now fully converted
-  }
-
-  // Once per device: move files from /v2 up to the root (where they now
-  // live) and delete the old single-file outline — the latter only once the
-  // new layout is in place, so nothing is removed before it's converted.
-  async tidyLayout() {
-    if (this.layoutDone) return;
-    if ((await this.kv.get('layout')) === 'root') { this.layoutDone = true; return; }
-    const R = this.remote;
-    if (await R.listAll(OLD_DIR)) {
-      await R.moveFile(`${OLD_DIR}/index.json.gz`, '/index.json.gz');
-      await R.moveFile(`${OLD_DIR}/docs`, '/docs');
-      await R.deleteRev(OLD_DIR, null); // what's left: empty, or stale if another device moved first
-    }
-    const now = await R.listAll(DIR);
-    if (now?.entries.some((e) => e.tag === 'file' && pathShard(e.path))) {
-      await R.deleteRev(LEGACY, null);
-      await R.deleteRev(LEGACY_DONE, null);
-    }
-    this.cursor = null; // list everything once at the new location
-    await this.kv.batch([['cursor', undefined], ['layout', 'root']]);
-    this.layoutDone = true;
-  }
-
-  // The pre-split single file, with this device's last synced copy of it.
-  async loadLegacy() {
-    const got = await this.remote.download(LEGACY);
-    if (!got) return null;
-    const oldBase = load('base');
-    return { nodes: parseDoc(got.text), base: oldBase && load('baseRev') ? oldBase : {} };
   }
 
   async fetchShard(s) {
@@ -288,9 +244,6 @@ export class Sync {
     this.base = next;
     if (listing?.cursor) this.cursor = listing.cursor;
     save('pristine', null);
-    // The pre-split sync state (single file) is no longer needed.
-    save('base', null);
-    save('baseRev', null);
   }
 
   async saveCursor(listing) {
@@ -306,8 +259,6 @@ export class Sync {
     await this.kv.batch(ops);
     this.base = {};
     this.cursor = null;
-    save('base', null);
-    save('baseRev', null);
     this.setStatus('off');
   }
 }

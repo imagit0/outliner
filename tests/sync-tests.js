@@ -1,7 +1,7 @@
 // Sync tests: two simulated devices against a simulated Dropbox (files with
 // revisions, conditional writes, a change log for cursors).
 
-import { Outline, ROOT, FORMAT, sameNodes } from '../js/model.js';
+import { Outline, ROOT, sameNodes } from '../js/model.js';
 import { Sync } from '../js/sync.js';
 import { memoryKV } from '../js/idb.js';
 import { LocalStore } from '../js/local.js';
@@ -69,34 +69,9 @@ function fakeDropbox() {
         if (k.startsWith(key(p) + '/')) { files.delete(k); change(g.path, null); }
       }
     },
-    async moveFile(a, b) {
-      await tick();
-      const moves = [...files].filter(([k]) => k === key(a) || k.startsWith(key(a) + '/'));
-      if (!moves.length) return false;
-      if ([...files.keys()].some((k) => k === key(b) || k.startsWith(key(b) + '/'))) return false; // target exists
-      for (const [k, f] of moves) {
-        const to = b + f.path.slice(a.length);
-        files.delete(k);
-        files.set(key(to), { ...f, path: to });
-        change(f.path, null);
-        change(to, f.rev);
-      }
-      return true;
-    },
-    async download(p) {
-      await tick();
-      const f = files.get(key(p));
-      return f ? { text: new TextDecoder().decode(f.bytes), rev: f.rev } : null;
-    },
-  };
-  const putLegacy = (nodes) => {
-    const rev = 'r' + ++revN;
-    files.set('/outline.json', { path: '/outline.json', bytes: new TextEncoder().encode(JSON.stringify({ format: FORMAT, nodes })), rev });
-    change('/outline.json', rev);
-    return rev;
   };
   const reset = () => { stats.up = stats.upBytes = stats.down = stats.lists = 0; };
-  return { api, files, stats, reset, putLegacy };
+  return { api, files, stats, reset };
 }
 
 // A device: its own outline, its own storage, sharing the fake Dropbox.
@@ -135,7 +110,7 @@ function sample() {
 const texts = (o, pid) => o.children(pid).map((n) => n.t);
 const withLocal = (fn) => {
   // Sync reads/writes a few flags in localStorage ('ol.*'); keep tests clean.
-  const keys = ['ol.base', 'ol.baseRev', 'ol.pristine', 'ol.lastSync'];
+  const keys = ['ol.pristine', 'ol.lastSync'];
   const saved = keys.map((k) => localStorage.getItem(k));
   keys.forEach((k) => localStorage.removeItem(k));
   return Promise.resolve(fn()).finally(() => keys.forEach((k, i) => (saved[i] === null ? localStorage.removeItem(k) : localStorage.setItem(k, saved[i]))));
@@ -157,60 +132,14 @@ export function syncTests(test, { eq, ok }) {
     eq(shardMap(nodes).get(todo), INDEX);
   });
 
-  test('sync: first device moves old outline.json into per-document files', () => withLocal(async () => {
+  test('sync: first device uploads an index plus one file per document', () => withLocal(async () => {
     const server = fakeDropbox();
     const { nodes, todo, notes } = sample();
-    const rev = server.putLegacy(nodes);
-    localStorage.setItem('ol.base', JSON.stringify(nodes));
-    localStorage.setItem('ol.baseRev', JSON.stringify(rev));
     const A = await device(server, nodes);
     await A.sync();
     const paths = [...server.files.values()].map((f) => f.path).sort();
-    ok(!paths.includes('/outline.json'), 'old file deleted after converting: ' + paths);
-    eq(paths, ['/docs/' + notes + '.json.gz', '/docs/' + todo + '.json.gz', '/index.json.gz'].sort(), 'index + 2 docs at the root');
+    eq(paths, ['/docs/' + notes + '.json.gz', '/docs/' + todo + '.json.gz', '/index.json.gz'].sort());
     ok(sameNodes(A.o.nodes, nodes), 'outline unchanged');
-    eq(localStorage.getItem('ol.base'), null, 'old sync state cleared');
-    void todo; void notes;
-  }));
-
-  test('sync: files under /v2 move up to the root; old files are removed', () => withLocal(async () => {
-    const server = fakeDropbox();
-    const { nodes, todo, notes } = sample();
-    // How Dropbox looked after the first split: files under /v2, plus the
-    // renamed single file.
-    for (const [s, n] of Object.entries(split(nodes))) {
-      const path = s === INDEX ? '/v2/index.json.gz' : `/v2/docs/${s.slice(2)}.json.gz`;
-      await server.api.putBytes(path, await gzip(pack(n)), null);
-    }
-    server.putLegacy(nodes);
-    await server.api.moveFile('/outline.json', '/outline-before-split.json');
-    // A device that synced with /v2 already has local data; a fresh store
-    // stands in for it (it re-reads everything once anyway).
-    const A = await device(server, nodes);
-    await A.sync();
-    const paths = [...server.files.values()].map((f) => f.path).sort();
-    eq(paths, ['/docs/' + notes + '.json.gz', '/docs/' + todo + '.json.gz', '/index.json.gz'].sort(), 'only the new layout remains: ' + paths);
-    ok(sameNodes(A.o.nodes, nodes), 'outline intact');
-    // A second device afterwards: nothing left to move, still in sync.
-    const B = await device(server, nodes);
-    await B.sync();
-    ok(sameNodes(B.o.nodes, nodes));
-    A.o.update(A.o.children(todo)[0].id, { t: 'after the move' });
-    await A.sync();
-    await B.sync();
-    eq(B.o.children(todo)[0].t, 'after the move');
-  }));
-
-  test('sync: a fresh setup with only the old file keeps it until converted', () => withLocal(async () => {
-    const server = fakeDropbox();
-    const { nodes } = sample();
-    server.putLegacy(nodes);
-    const fresh = Outline.empty();
-    localStorage.setItem('ol.pristine', 'true');
-    const C = await device(server, fresh.nodes);
-    await C.sync();
-    ok(sameNodes(C.o.nodes, nodes), 'converted from the old file, not lost');
-    ok(![...server.files.values()].some((f) => f.path === '/outline.json'), 'old file removed only after');
   }));
 
   test('sync: second device joins, edits upload only their document', () => withLocal(async () => {
@@ -352,28 +281,21 @@ export function syncTests(test, { eq, ok }) {
     eq(server.stats.lists, 1);
   }));
 
-  test('local storage: saves only changed documents, migrates from localStorage', async () => {
+  test('local storage: one record per document, saves only what changed', async () => {
     const kv = memoryKV();
     const store = new LocalStore(kv);
     const { nodes, todo } = sample();
-    const prev = localStorage.getItem('ol.doc');
-    localStorage.setItem('ol.doc', JSON.stringify(nodes));
-    try {
-      const loaded = await store.load();
-      ok(sameNodes(loaded, nodes), 'migrated');
-      eq(localStorage.getItem('ol.doc'), null, 'old copy removed');
-      eq([...kv.map.keys()].filter((k) => k.startsWith('local:')).length, 3);
-      const o = new Outline(loaded);
-      o.update(o.children(todo)[0].id, { t: 'changed' });
-      let writes = 0;
-      const orig = kv.batch;
-      kv.batch = async (ops) => { writes += ops.length; return orig(ops); };
-      await store.save(o.nodes);
-      eq(writes, 1, 'one document rewritten');
-      const again = await new LocalStore(kv).load();
-      ok(sameNodes(again, o.nodes), 'reload');
-    } finally {
-      if (prev === null) localStorage.removeItem('ol.doc'); else localStorage.setItem('ol.doc', prev);
-    }
+    eq(await store.load(), null, 'empty at first');
+    await store.save(nodes);
+    eq([...kv.map.keys()].filter((k) => k.startsWith('local:')).length, 3);
+    const o = new Outline(structuredClone(nodes));
+    o.update(o.children(todo)[0].id, { t: 'changed' });
+    let writes = 0;
+    const orig = kv.batch;
+    kv.batch = async (ops) => { writes += ops.length; return orig(ops); };
+    await store.save(o.nodes);
+    eq(writes, 1, 'one document rewritten');
+    const again = await new LocalStore(kv).load();
+    ok(sameNodes(again, o.nodes), 'reload');
   });
 }

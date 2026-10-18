@@ -12,7 +12,6 @@ import { ROOT, FIELDS } from './model.js';
 
 export const INDEX = 'index';
 export const DIR = ''; // the app folder's root
-export const OLD_DIR = '/v2'; // where the files lived briefly (moved up on first sync)
 
 // Which shard each node belongs to: Map id -> shard key.
 export function shardMap(nodes) {

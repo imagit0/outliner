@@ -1,12 +1,9 @@
 // The outline on this device, in IndexedDB, one record per document (shards,
 // see shards.js), so saving after an edit rewrites only what changed.
-// On first run it moves the outline over from localStorage (the old store,
-// which is limited to about 5 MB).
 
 import { idbKV } from './idb.js';
 import { split, join } from './shards.js';
 import { sameNodes } from './model.js';
-import { load, save } from './store.js';
 
 const P = 'local:';
 
@@ -20,17 +17,9 @@ export class LocalStore {
   // The saved outline, or null if there is none.
   async load() {
     const entries = await this.kv.entries(P);
-    if (entries.length) {
-      for (const [k, v] of entries) this.saved[k.slice(P.length)] = v;
-      return join(this.saved);
-    }
-    const old = load('doc');
-    if (old) {
-      await this.write(old);
-      save('doc', null); // only once it's safely in IndexedDB
-      return old;
-    }
-    return null;
+    if (!entries.length) return null;
+    for (const [k, v] of entries) this.saved[k.slice(P.length)] = v;
+    return join(this.saved);
   }
 
   // Save (serialized, so overlapping saves can't interleave).

@@ -46,9 +46,6 @@ When a device syncs:
 4. It uploads only the files whose content changed, each only if the file hasn't changed again in the meantime; otherwise it starts over.
 
 Moving a line between documents changes two files. In the rare case of a race, a line can appear twice (never zero times). When it does, the newer copy wins.
-
-The first device to run this layout converts the old single `outline.json`, then deletes it.
-
 - Different items edited on two devices: both edits are kept.
 - Same item, different fields (e.g. text on one device, completed on the other): both changes are kept.
 - Same item's text edited on both devices: the newer edit wins, and the other text is kept as a sibling item marked "(conflict)". Nothing is lost.

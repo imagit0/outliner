@@ -105,24 +105,6 @@ async function call(url, headers, body) {
 // Header args must be ASCII; escape anything else.
 const apiArg = (obj) => JSON.stringify(obj).replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 
-// Returns { text, rev } or null if the file does not exist.
-export async function download(path) {
-  const res = await call(`${CONTENT}/files/download`, { 'Dropbox-API-Arg': apiArg({ path }) });
-  if (res.status === 409) {
-    const err = await res.json().catch(() => ({}));
-    if (String(err.error_summary || '').startsWith('path/not_found')) return null;
-    throw new Error(`download: ${err.error_summary || 409}`);
-  }
-  if (!res.ok) throw new Error(`download ${res.status}`);
-  const text = await res.text();
-  const meta = res.headers.get('Dropbox-API-Result');
-  if (meta) return { text, rev: JSON.parse(meta).rev };
-  // Fallback if the header is not exposed to us.
-  const m = await call(`${API}/files/get_metadata`, { 'Content-Type': 'application/json' }, JSON.stringify({ path }));
-  if (!m.ok) throw new Error(`get_metadata ${m.status}`);
-  return { text, rev: (await m.json()).rev };
-}
-
 async function rpc(endpoint, args) {
   const res = await call(`${API}/${endpoint}`, { 'Content-Type': 'application/json' }, JSON.stringify(args));
   if (!res.ok) {
@@ -132,16 +114,6 @@ async function rpc(endpoint, args) {
     throw e;
   }
   return res.json();
-}
-
-// Current revision of a file (cheap: no content), or null if it doesn't exist.
-export async function getRev(path) {
-  try {
-    return (await rpc('files/get_metadata', { path })).rev;
-  } catch (e) {
-    if (e.summary && e.summary.startsWith('path/not_found')) return null;
-    throw e;
-  }
 }
 
 // ---- plain files (backups) ----
@@ -261,17 +233,6 @@ export async function deleteRev(path, rev) {
   }
 }
 
-// Move a file or folder. Returns false if `from` is missing or `to` exists.
-export async function moveFile(from, to) {
-  try {
-    await rpc('files/move_v2', { from_path: from, to_path: to, autorename: false });
-    return true;
-  } catch (e) {
-    if (e.summary && (e.summary.startsWith('from_lookup/not_found') || e.summary.startsWith('to/conflict'))) return false;
-    throw e;
-  }
-}
-
 // ---- change notifications ----
 // A cursor marks a point in the app folder's history; longpoll() holds the
 // request open until something changes after it (or the timeout passes).
@@ -304,16 +265,3 @@ export async function changesSince(cursor) {
   return { entries, cursor: page.cursor };
 }
 
-// Uploads only if the file is still at `rev` (or does not exist, when rev is
-// null). Throws ConflictError if someone else wrote it first. Returns new rev.
-export async function upload(path, text, rev) {
-  const arg = { path, mode: rev ? { '.tag': 'update', update: rev } : { '.tag': 'add' }, autorename: false, mute: true };
-  const res = await call(`${CONTENT}/files/upload`, { 'Dropbox-API-Arg': apiArg(arg), 'Content-Type': 'application/octet-stream' }, text);
-  if (res.status === 409) {
-    const err = await res.json().catch(() => ({}));
-    if (String(err.error_summary || '').includes('conflict')) throw new ConflictError(err.error_summary);
-    throw new Error(`upload: ${err.error_summary || 409}`);
-  }
-  if (!res.ok) throw new Error(`upload ${res.status}`);
-  return (await res.json()).rev;
-}
