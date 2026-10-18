@@ -842,7 +842,6 @@ export class UI {
       for (const n of done) this.o.remove(n.id);
       return null;
     });
-    this.toast(`Deleted ${done.length} completed item${done.length === 1 ? '' : 's'} (Ctrl+Z to undo)`);
   }
 
   setAllCollapsed(c) {
