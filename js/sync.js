@@ -16,14 +16,15 @@
 // Edits made while a sync is in flight are kept by merging them on top.
 //
 // The first device to run this version moves the old single /outline.json
-// into the new layout and renames it to /outline-before-split.json.
+// into the new layout and then deletes it. (Files that briefly lived under
+// /v2 are moved up to the root once, see tidyLayout.)
 
 import * as dropbox from './dropbox.js';
 import { idbKV } from './idb.js';
 import { merge } from './merge.js';
 import { parseDoc, sameNodes } from './model.js';
 import { load, save } from './store.js';
-import { DIR, split, join, shardPath, pathShard, pack, unpack, gzip, gunzip, isGzip } from './shards.js';
+import { DIR, OLD_DIR, split, join, shardPath, pathShard, pack, unpack, gzip, gunzip, isGzip } from './shards.js';
 
 const MAX_WAIT = 4000;
 const LEGACY = '/outline.json';
@@ -153,6 +154,7 @@ export class Sync {
   }
 
   async once() {
+    await this.tidyLayout();
     const snap = structuredClone(this.getNodes());
     const R = this.remote;
 
@@ -226,9 +228,29 @@ export class Sync {
     }
 
     await this.commit(next, listing);
-    if (legacy) {
-      try { await R.moveFile(LEGACY, LEGACY_DONE); } catch (e) { console.warn('could not rename old outline.json', e); }
+    if (legacy) await R.deleteRev(LEGACY, null); // now fully converted
+  }
+
+  // Once per device: move files from /v2 up to the root (where they now
+  // live) and delete the old single-file outline — the latter only once the
+  // new layout is in place, so nothing is removed before it's converted.
+  async tidyLayout() {
+    if (this.layoutDone) return;
+    if ((await this.kv.get('layout')) === 'root') { this.layoutDone = true; return; }
+    const R = this.remote;
+    if (await R.listAll(OLD_DIR)) {
+      await R.moveFile(`${OLD_DIR}/index.json.gz`, '/index.json.gz');
+      await R.moveFile(`${OLD_DIR}/docs`, '/docs');
+      await R.deleteRev(OLD_DIR, null); // what's left: empty, or stale if another device moved first
     }
+    const now = await R.listAll(DIR);
+    if (now?.entries.some((e) => e.tag === 'file' && pathShard(e.path))) {
+      await R.deleteRev(LEGACY, null);
+      await R.deleteRev(LEGACY_DONE, null);
+    }
+    this.cursor = null; // list everything once at the new location
+    await this.kv.batch([['cursor', undefined], ['layout', 'root']]);
+    this.layoutDone = true;
   }
 
   // The pre-split single file, with this device's last synced copy of it.

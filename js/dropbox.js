@@ -185,8 +185,9 @@ export async function deleteFile(path) {
 
 export class ResetError extends Error {}
 
-// Every file under `path` (recursive): { entries, cursor }, or null if the
-// folder doesn't exist. Entries: { tag: 'file'|'deleted'|'folder', path, rev }.
+// Every file under `path` ('' = app folder root, recursive): { entries,
+// cursor }, or null if the folder doesn't exist.
+// Entries: { tag: 'file'|'deleted'|'folder', path, rev }.
 export async function listAll(path) {
   let page;
   try {
@@ -260,8 +261,15 @@ export async function deleteRev(path, rev) {
   }
 }
 
+// Move a file or folder. Returns false if `from` is missing or `to` exists.
 export async function moveFile(from, to) {
-  await rpc('files/move_v2', { from_path: from, to_path: to, autorename: true });
+  try {
+    await rpc('files/move_v2', { from_path: from, to_path: to, autorename: false });
+    return true;
+  } catch (e) {
+    if (e.summary && (e.summary.startsWith('from_lookup/not_found') || e.summary.startsWith('to/conflict'))) return false;
+    throw e;
+  }
 }
 
 // ---- change notifications ----

@@ -34,7 +34,7 @@ Keyboard shortcuts are listed in the app (☰ → Keyboard shortcuts).
 
 ## How sync works
 
-In Dropbox (`Apps/<your app name>/v2/`), the outline is split into one gzip-compressed file per document (`docs/<id>.json.gz`) plus `index.json.gz` for the sidebar (folders, document names and order). Default values are left out, so the files stay small. A small edit uploads only the file of the document it touched, typically a few KB even when the whole outline is several MB.
+In Dropbox (`Apps/<your app name>/`), the outline is split into one gzip-compressed file per document (`docs/<id>.json.gz`) plus `index.json.gz` for the sidebar (folders, document names and order). Default values are left out, so the files stay small. A small edit uploads only the file of the document it touched, typically a few KB even when the whole outline is several MB.
 
 Each device keeps its own copy in IndexedDB, one record per document. For each Dropbox file it also keeps the last synced version (the "base") and that file's Dropbox revision.
 
@@ -47,7 +47,7 @@ When a device syncs:
 
 Moving a line between documents changes two files. In the rare case of a race, a line can appear twice (never zero times). When it does, the newer copy wins.
 
-The first device to run this layout converts the old single `outline.json` and renames it `outline-before-split.json`.
+The first device to run this layout converts the old single `outline.json`, then deletes it.
 
 - Different items edited on two devices: both edits are kept.
 - Same item, different fields (e.g. text on one device, completed on the other): both changes are kept.

@@ -27,7 +27,7 @@ function fakeDropbox() {
       stats.lists++;
       const d = key(dir) + '/';
       const entries = [...files.values()].filter((f) => key(f.path).startsWith(d)).map((f) => ({ tag: 'file', path: f.path, rev: f.rev }));
-      if (!entries.length) return null;
+      if (!entries.length && dir) return null; // folder missing (the root always exists)
       return { entries, cursor: String(log.length) };
     },
     async listSince(c) {
@@ -36,7 +36,6 @@ function fakeDropbox() {
       const latest = new Map();
       for (const e of log.slice(+c)) latest.set(key(e.path), e);
       const entries = [...latest.values()]
-        .filter((e) => key(e.path).startsWith('/v2/'))
         .map((e) => (e.rev ? { tag: 'file', path: e.path, rev: e.rev } : { tag: 'deleted', path: e.path, rev: null }));
       return { entries, cursor: String(log.length) };
     },
@@ -60,19 +59,29 @@ function fakeDropbox() {
     async deleteRev(p, rev) {
       await tick();
       const f = files.get(key(p));
-      if (!f) return;
-      if (rev && f.rev !== rev) throw new ConflictError('conflict');
-      files.delete(key(p));
-      change(p, null);
+      if (f) {
+        if (rev && f.rev !== rev) throw new ConflictError('conflict');
+        files.delete(key(p));
+        change(p, null);
+        return;
+      }
+      for (const [k, g] of [...files]) { // a folder: everything under it
+        if (k.startsWith(key(p) + '/')) { files.delete(k); change(g.path, null); }
+      }
     },
     async moveFile(a, b) {
       await tick();
-      const f = files.get(key(a));
-      if (!f) return;
-      files.delete(key(a));
-      files.set(key(b), { ...f, path: b });
-      change(a, null);
-      change(b, f.rev);
+      const moves = [...files].filter(([k]) => k === key(a) || k.startsWith(key(a) + '/'));
+      if (!moves.length) return false;
+      if ([...files.keys()].some((k) => k === key(b) || k.startsWith(key(b) + '/'))) return false; // target exists
+      for (const [k, f] of moves) {
+        const to = b + f.path.slice(a.length);
+        files.delete(k);
+        files.set(key(to), { ...f, path: to });
+        change(f.path, null);
+        change(to, f.rev);
+      }
+      return true;
     },
     async download(p) {
       await tick();
@@ -157,12 +166,51 @@ export function syncTests(test, { eq, ok }) {
     const A = await device(server, nodes);
     await A.sync();
     const paths = [...server.files.values()].map((f) => f.path).sort();
-    ok(paths.includes('/outline-before-split.json'), 'old file renamed: ' + paths);
-    ok(!paths.includes('/outline.json'), 'old file gone');
-    eq(paths.filter((p) => p.startsWith('/v2/')).length, 3, 'index + 2 docs');
+    ok(!paths.includes('/outline.json'), 'old file deleted after converting: ' + paths);
+    eq(paths, ['/docs/' + notes + '.json.gz', '/docs/' + todo + '.json.gz', '/index.json.gz'].sort(), 'index + 2 docs at the root');
     ok(sameNodes(A.o.nodes, nodes), 'outline unchanged');
     eq(localStorage.getItem('ol.base'), null, 'old sync state cleared');
     void todo; void notes;
+  }));
+
+  test('sync: files under /v2 move up to the root; old files are removed', () => withLocal(async () => {
+    const server = fakeDropbox();
+    const { nodes, todo, notes } = sample();
+    // How Dropbox looked after the first split: files under /v2, plus the
+    // renamed single file.
+    for (const [s, n] of Object.entries(split(nodes))) {
+      const path = s === INDEX ? '/v2/index.json.gz' : `/v2/docs/${s.slice(2)}.json.gz`;
+      await server.api.putBytes(path, await gzip(pack(n)), null);
+    }
+    server.putLegacy(nodes);
+    await server.api.moveFile('/outline.json', '/outline-before-split.json');
+    // A device that synced with /v2 already has local data; a fresh store
+    // stands in for it (it re-reads everything once anyway).
+    const A = await device(server, nodes);
+    await A.sync();
+    const paths = [...server.files.values()].map((f) => f.path).sort();
+    eq(paths, ['/docs/' + notes + '.json.gz', '/docs/' + todo + '.json.gz', '/index.json.gz'].sort(), 'only the new layout remains: ' + paths);
+    ok(sameNodes(A.o.nodes, nodes), 'outline intact');
+    // A second device afterwards: nothing left to move, still in sync.
+    const B = await device(server, nodes);
+    await B.sync();
+    ok(sameNodes(B.o.nodes, nodes));
+    A.o.update(A.o.children(todo)[0].id, { t: 'after the move' });
+    await A.sync();
+    await B.sync();
+    eq(B.o.children(todo)[0].t, 'after the move');
+  }));
+
+  test('sync: a fresh setup with only the old file keeps it until converted', () => withLocal(async () => {
+    const server = fakeDropbox();
+    const { nodes } = sample();
+    server.putLegacy(nodes);
+    const fresh = Outline.empty();
+    localStorage.setItem('ol.pristine', 'true');
+    const C = await device(server, fresh.nodes);
+    await C.sync();
+    ok(sameNodes(C.o.nodes, nodes), 'converted from the old file, not lost');
+    ok(![...server.files.values()].some((f) => f.path === '/outline.json'), 'old file removed only after');
   }));
 
   test('sync: second device joins, edits upload only their document', () => withLocal(async () => {

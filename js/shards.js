@@ -11,7 +11,8 @@
 import { ROOT, FIELDS } from './model.js';
 
 export const INDEX = 'index';
-export const DIR = '/v2';
+export const DIR = ''; // the app folder's root
+export const OLD_DIR = '/v2'; // where the files lived briefly (moved up on first sync)
 
 // Which shard each node belongs to: Map id -> shard key.
 export function shardMap(nodes) {
@@ -53,12 +54,12 @@ export function join(shards) {
   return out;
 }
 
-export const shardPath = (s) => (s === INDEX ? `${DIR}/index.json.gz` : `${DIR}/docs/${s.slice(2)}.json.gz`);
+export const shardPath = (s) => (s === INDEX ? '/index.json.gz' : `/docs/${s.slice(2)}.json.gz`);
 
 // Shard key for a Dropbox path (use path_display: ids are case-sensitive).
 export function pathShard(path) {
-  if (path.toLowerCase() === `${DIR}/index.json.gz`) return INDEX;
-  const m = /^\/v2\/docs\/([^/]+)\.json\.gz$/i.exec(path);
+  if (path.toLowerCase() === '/index.json.gz') return INDEX;
+  const m = /^\/docs\/([^/]+)\.json\.gz$/i.exec(path);
   return m ? 'd:' + m[1] : null;
 }
 
