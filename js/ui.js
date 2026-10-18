@@ -76,7 +76,9 @@ export class UI {
     if (this.query.trim() && this.prefs.searchAll) return this.renderSearchAll();
     const visible = this.visibleSet();
     const z = this.o.get(this.zoom);
-    let html = `<div class="title text${z.d ? ' done' : ''}${colorClass(z)}" contenteditable="plaintext-only" spellcheck="true" data-id="${z.id}" data-placeholder="Untitled">${format(z.t)}</div>`;
+    let html =
+      `<div class="title-line"><button class="doc-menu" type="button" title="Document actions" aria-label="Document actions">⋯</button>` +
+      `<div class="title text${z.d ? ' done' : ''}${colorClass(z)}" contenteditable="plaintext-only" spellcheck="true" data-id="${z.id}" data-placeholder="Untitled">${format(z.t)}</div></div>`;
     const kids = this.renderChildren(this.zoom, visible);
     html += kids
       ? `<div class="list">${kids}</div>`
@@ -813,6 +815,49 @@ export class UI {
     this.menu.open(items, x, y);
   }
 
+  // The ⋯ left of the title: acts on what's shown (the document, or the item
+  // zoomed into).
+  openDocMenu(x, y) {
+    this.menu.lastKey = 'doc-menu';
+    this.menu.open([
+      { label: 'Delete completed items', run: () => this.deleteCompleted() },
+      'sep',
+      { label: 'Expand all', run: () => this.setAllCollapsed(false) },
+      { label: 'Collapse all', run: () => this.setAllCollapsed(true) },
+    ], x, y);
+  }
+
+  // Everything under the zoomed item, in outline order.
+  descendants(id) {
+    const out = [];
+    const walk = (pid) => { for (const k of this.o.children(pid)) { out.push(k); if (!k.tb) walk(k.id); } };
+    walk(id);
+    return out;
+  }
+
+  deleteCompleted() {
+    const done = this.descendants(this.zoom).filter((n) => n.d && !this.o.ancestors(n.id).some((a) => a.d && this.o.isAncestor(this.zoom, a.id)));
+    if (!done.length) return this.toast('No completed items here');
+    const under = done.reduce((s, n) => s + this.descendants(n.id).length, 0);
+    const msg = `Delete ${done.length} completed item${done.length === 1 ? '' : 's'}` +
+      (under ? ` (and ${under} line${under === 1 ? '' : 's'} under them)` : '') + '?\n\n(Undo brings them back.)';
+    if (!confirm(msg)) return;
+    this.op(() => {
+      for (const n of done) this.o.remove(n.id);
+      return null;
+    });
+    this.toast(`Deleted ${done.length} completed item${done.length === 1 ? '' : 's'}`);
+  }
+
+  setAllCollapsed(c) {
+    const targets = this.descendants(this.zoom).filter((n) => (n.c || false) !== c && this.o.hasChildren(n.id));
+    if (!targets.length) return;
+    this.op(() => {
+      for (const n of targets) this.o.update(n.id, { c });
+      return null;
+    });
+  }
+
   openItemMenu(id, x, y) {
     const n = this.o.get(id);
     if (!n) return;
@@ -912,6 +957,12 @@ export class UI {
 
     m.addEventListener('click', (e) => {
       const t = e.target;
+      const docMenu = t.closest('.doc-menu');
+      if (docMenu) {
+        if (this.menu.lastKey === 'doc-menu' && Date.now() - this.menu.closedAt < 300) return; // second click closes
+        const r = docMenu.getBoundingClientRect();
+        return this.openDocMenu(r.left, r.bottom + 2);
+      }
       const open = t.closest('[data-open]');
       if (open) {
         e.preventDefault();

@@ -196,8 +196,14 @@ menu.addEventListener('click', async (e) => {
       return exportDocOPML(outline.docOf(ui.zoom).id);
     case 'm-import-opml':
       return $('#import').showModal();
-    case 'm-help':
-      return $('#help').showModal();
+    case 'm-help': {
+      // Always start at the top (the browser would otherwise focus the Close
+      // button at the bottom and scroll there).
+      const help = $('#help');
+      help.showModal();
+      help.scrollTop = 0;
+      return;
+    }
     case 'm-settings':
       return openSettings();
   }

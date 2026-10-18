@@ -7,6 +7,7 @@ No build step: plain HTML/CSS/ES modules.
 ## Features
 
 - Multiple documents in nested folders, shown in a sidebar (a slide-out drawer on phones). You can create, rename, duplicate and delete (undoably) documents and folders, and drag them to reorder or move them into folders. Use each entry's **⋯** menu, or right-click it on desktop.
+- The ⋯ left of a document's title: Delete completed items, Expand all, Collapse all (for the document, or the item you're zoomed into).
 - Right-click an item's bullet for a menu: zoom, complete, collapse, color, heading, duplicate, move to document, delete. Right-clicking text still gives the browser's menu (spelling, cut/copy/paste).
 - Nested bullets: Enter, Tab / Shift+Tab, move, collapse, complete (strikethrough), hide completed
 - Line colors: Ctrl+1–6 (red, orange, yellow, green, blue, purple), Ctrl+0 to clear
@@ -17,7 +18,7 @@ No build step: plain HTML/CSS/ES modules.
 - Inline `**bold**` (Ctrl+B), `__italic__` (Ctrl+I), `~~strikethrough~~` (Ctrl+T), `==highlight==` (Ctrl+H), `` `code` ``, `[text](url)` links (Ctrl+K) and plain web addresses (Dynalist syntax)
 - Image links: `![caption](url)` or `!https://…` show a preview on hover (tap on phones)
 - Tables (Ctrl+Alt+T or ▦ on phones): every cell is an ordinary line. Columns size to their content and wrap when the table gets too wide. A toolbar appears above the table while you edit a cell: add/remove rows and columns, delete the table. In a table, Tab moves to the next cell, Enter moves down a row (or adds one at the bottom), and Ctrl+Alt+arrows insert rows and columns. Ctrl+Shift+0–6 colors a whole row. Drag a column's right edge to set its width (double-click the edge to go back to automatic). The toolbar's **Header** button styles the first row as a header, and **Borders** turns cell borders on or off (with borders off, colored cells touch).
-- Import OPML (⋮ → Import OPML…): choose several files, or a folder, or drag any mix of OPML files and folders onto the window. Each file becomes a document; each folder becomes a folder, with everything inside it imported recursively (folders that contain no OPML are skipped). Everything is added at the end of the sidebar, and one undo removes the whole import.
+- Import OPML (⋮ → Import OPML…): choose several files, or a folder, or drag any mix of OPML files and folders onto the window. Each file becomes a document; each folder becomes a folder, with everything inside it imported recursively (folders that contain no OPML are skipped). Everything is added at the end of the sidebar, with imported lines collapsed, and one undo removes the whole import.
 - OPML export (current document). Tables survive the round trip through extra attributes, and other outliners show them as nested bullets. OPML exported from Dynalist imports with completion, colors and notes (notes become child lines).
 - Ctrl+Shift+Backspace deletes an item, Ctrl+D duplicates it, Ctrl+. expands or collapses it, Ctrl+Shift+M moves it to another document, Ctrl+, opens Settings. Ctrl+Shift+Tab outdents a line but keeps its place (the lines below it become its children).
 - Select several lines by dragging across them with the mouse (or Shift+click). Then Delete, Ctrl+C / Ctrl+X (as indented text), Tab / Shift+Tab, Ctrl+0–6, Ctrl+Enter and Ctrl+D act on all of them.

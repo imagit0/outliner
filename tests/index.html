@@ -236,7 +236,7 @@ test('import OPML: picked files become documents, picked folders become folders'
   const opml = (title, lines) => `<?xml version="1.0"?><opml version="2.0"><head><title>${title}</title></head><body>${lines.map((l) => `<outline text="${l}"/>`).join('')}</body></opml>`;
   // A mix, as from drag and drop: two loose files plus a folder "Notes".
   const files = [
-    ['Inbox.opml', opml('Inbox', ['i1'])],
+    ['Inbox.opml', `<?xml version="1.0"?><opml version="2.0"><head><title>Inbox</title></head><body><outline text="i1"><outline text="i1a"><outline text="deep"/></outline></outline></body></opml>`],
     ['Archive 2024.opml', opml('', ['old'])],
     ['Notes/Work/Project 10.opml', opml('Project 10', ['a', 'b'])],
     ['Notes/Work/Project 2.opml', opml('Project 2', ['c'])],
@@ -246,7 +246,11 @@ test('import OPML: picked files become documents, picked folders become folders'
   const o = new Outline();
   o.insert(ROOT, null, { t: 'existing doc' });
   const r = await importFiles(o, files);
-  eq([r.docs, r.folders, r.lines, r.failed.length], [5, 2, 8, 1]);
+  eq([r.docs, r.folders, r.lines, r.failed.length], [5, 2, 10, 1]);
+  // Imported lines arrive collapsed.
+  const inbox = o.children(ROOT).find((d) => d.t === 'Inbox');
+  const i1 = o.children(inbox.id)[0];
+  eq([i1.c, o.children(i1.id)[0].c, o.children(o.children(i1.id)[0].id)[0].c], [true, true, false], 'collapsed where there are children');
   // Root: existing, then folders first, then documents (natural order).
   eq(o.children(ROOT).map((k) => k.t + (k.f ? '/' : '')), ['existing doc', 'Notes/', 'Archive 2024', 'Inbox']);
   const notes = o.children(ROOT)[1];

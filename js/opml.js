@@ -136,7 +136,7 @@ export async function importFiles(outline, files) {
         const { title, items } = parseOPML(await f.text());
         const doc = outline.insert(parentId, prev, { t: title || fileName(f).replace(/\.(opml|xml)$/i, '') });
         prev = doc.id;
-        result.lines += insertItems(outline, doc.id, items);
+        result.lines += insertItems(outline, doc.id, items, { collapse: true });
         result.docs++;
         result.first ||= doc.id;
       } catch (err) {
@@ -180,20 +180,22 @@ export function droppedFiles(dataTransfer) {
 // Insert parsed items (in order) as the first children of parentId. Returns
 // the number of nodes. Builds the nodes directly with evenly spaced keys, so
 // importing tens of thousands of lines is fast and keys stay short.
-export function insertItems(outline, parentId, items) {
+// collapse: start every line that has children collapsed (imports).
+export function insertItems(outline, parentId, items, { collapse = false } = {}) {
   const first = outline.children(parentId)[0];
   const now = Date.now();
   let count = 0;
-  const add = (pid, list, before) => {
+  const add = (pid, list, before, inTable) => {
     const keys = keysBetween(null, before, list.length);
     list.forEach((it, i) => {
       const n = { id: newId(), p: pid, k: keys[i], t: '', d: false, c: false, m: now, ...it.fields };
+      if (collapse && !inTable && it.children?.length) n.c = true; // tables collapse too; their rows don't
       outline.nodes[n.id] = n;
       count++;
-      add(n.id, it.children || [], null);
+      add(n.id, it.children || [], null, inTable || !!n.tb);
     });
   };
-  add(parentId, items, first ? first.k : null);
+  add(parentId, items, first ? first.k : null, outline.isTable(parentId));
   outline.invalidate();
   return count;
 }
