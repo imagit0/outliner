@@ -423,6 +423,7 @@ body.col-resizing { user-select: none; }
 }
 #toolbar { gap: 0; padding-left: 2px; padding-right: 2px; }
 .tb-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tb-ico.tb-arrow { width: 26px; height: 26px; stroke-width: 2.6; } /* indent/outdent, up/down, undo/redo */
 #toolbar button:active { background: var(--hover); }
 #toolbar .aa { font-size: 16px; font-weight: 600; }
 #palette {
