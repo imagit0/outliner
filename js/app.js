@@ -5,7 +5,7 @@ import { UI } from './ui.js';
 import { Sync } from './sync.js';
 import * as dropbox from './dropbox.js';
 import { load, save, requestPersistence } from './store.js';
-import { exportOPML, parseOPML, insertItems } from './opml.js';
+import { exportOPML, parseOPML, insertItems, importFolder } from './opml.js';
 import { backup } from './backup.js';
 import { setInlineImages } from './format.js';
 import { LocalStore } from './local.js';
@@ -196,6 +196,8 @@ menu.addEventListener('click', async (e) => {
       return exportDocOPML(outline.docOf(ui.zoom).id);
     case 'm-import-opml':
       return $('#import-opml').click();
+    case 'm-import-folder':
+      return $('#import-folder').click();
     case 'm-help':
       return $('#help').showModal();
     case 'm-settings':
@@ -240,6 +242,24 @@ $('#import-opml').addEventListener('change', async (e) => {
   } catch (err) {
     alert(`OPML import failed: ${err.message}`);
   }
+});
+
+// Import a folder: OPML files become documents, subfolders (that contain
+// OPML somewhere inside) become folders. The picked folder itself becomes a
+// folder at the end of the sidebar.
+$('#import-folder').addEventListener('change', async (e) => {
+  const files = [...e.target.files]
+    .filter((f) => /\.(opml|xml)$/i.test(f.name))
+    .map((f) => ({ path: f.webkitRelativePath || f.name, text: () => f.text() }));
+  e.target.value = '';
+  if (!files.length) return alert('No OPML files found in that folder.');
+  ui.toast(`Importing ${files.length} file${files.length === 1 ? '' : 's'}…`);
+  ui.checkpoint();
+  const r = await importFolder(outline, files);
+  ui.onChange();
+  ui.render();
+  ui.toast(`Imported ${r.docs} document${r.docs === 1 ? '' : 's'} (${r.lines} lines) into folder “${r.name}”`);
+  if (r.failed.length) alert(`These files could not be imported:\n\n${r.failed.join('\n')}`);
 });
 
 $('#help-close').addEventListener('click', () => $('#help').close());

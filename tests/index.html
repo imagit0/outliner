@@ -5,10 +5,10 @@
 <h1>Outliner tests</h1>
 <pre id="out"></pre>
 <script type="module">
-import { keyBetween, Outline, ROOT, sameNodes } from '../js/model.js';
+import { keyBetween, keysBetween, Outline, ROOT, sameNodes } from '../js/model.js';
 import { merge } from '../js/merge.js';
 import { format } from '../js/format.js';
-import { exportOPML, parseOPML, insertItems } from '../js/opml.js';
+import { exportOPML, parseOPML, insertItems, importFolder } from '../js/opml.js';
 import { syncTests } from './sync-tests.js';
 
 const out = document.getElementById('out');
@@ -203,6 +203,56 @@ test('OPML import of Dynalist-style notes and colors', () => {
   const { items } = parseOPML(xml);
   eq(items[0].fields, { t: 'task', d: true, cl: 5 });
   eq(items[0].children.map((c) => c.fields.t), ['line one', 'line two', 'sub']);
+});
+
+test('keysBetween: many evenly spaced, short, ordered keys', () => {
+  for (const [a, b] of [[null, null], ['V', null], [null, 'V'], ['V', 'W'], ['a0V', 'a1']]) {
+    const ks = keysBetween(a, b, 5000);
+    eq(ks.length, 5000);
+    for (let i = 1; i < ks.length; i++) ok(ks[i - 1] < ks[i], `order at ${i}`);
+    ok(!a || ks[0] > a, 'after a');
+    ok(!b || ks.at(-1) < b, 'before b');
+    ok(Math.max(...ks.map((k) => k.length)) <= (a || b ? 8 : 4), `short keys between ${a} and ${b}: ${Math.max(...ks.map((k) => k.length))}`);
+  }
+});
+
+test('importing 20,000 lines is fast', () => {
+  const o = new Outline();
+  const d = o.insert(ROOT, null, { t: 'big' });
+  const items = [];
+  for (let i = 0; i < 2000; i++) {
+    items.push({ fields: { t: 'line ' + i }, children: Array.from({ length: 9 }, (_, j) => ({ fields: { t: `sub ${i}.${j}` }, children: [] })) });
+  }
+  const t0 = performance.now();
+  eq(insertItems(o, d.id, items), 20000);
+  const ms = performance.now() - t0;
+  ok(ms < 1500, `took ${Math.round(ms)} ms`);
+  eq(o.children(d.id).length, 2000);
+  eq(o.children(d.id)[1999].t, 'line 1999');
+  eq(o.children(o.children(d.id)[5].id).map((n) => n.t)[8], 'sub 5.8');
+});
+
+test('import folder: OPML files become documents, folders become folders', async () => {
+  const opml = (title, lines) => `<?xml version="1.0"?><opml version="2.0"><head><title>${title}</title></head><body>${lines.map((l) => `<outline text="${l}"/>`).join('')}</body></opml>`;
+  const files = [
+    ['Notes/Work/Project 10.opml', opml('Project 10', ['a', 'b'])],
+    ['Notes/Work/Project 2.opml', opml('Project 2', ['c'])],
+    ['Notes/Home.opml', opml('', ['x', 'y', 'z'])],
+    ['Notes/Empty folder/readme.txt', 'not opml'],
+    ['Notes/Broken.opml', '<opml><body><outline'],
+  ].filter(([p]) => /\.opml$/.test(p)).map(([path, text]) => ({ path, text: async () => text }));
+  const o = new Outline();
+  o.insert(ROOT, null, { t: 'existing doc' });
+  const r = await importFolder(o, files);
+  eq([r.name, r.docs, r.lines, r.failed.length], ['Notes', 3, 6, 1]);
+  const [existing, notes] = o.children(ROOT);
+  eq([existing.t, notes.t, notes.f], ['existing doc', 'Notes', true]);
+  const kids = o.children(notes.id);
+  eq(kids.map((k) => k.t + (k.f ? '/' : '')), ['Work/', 'Home']); // folders first; Home named from the file
+  eq(o.children(kids[0].id).map((k) => k.t), ['Project 2', 'Project 10']); // natural order
+  eq(kids[0].c, true, 'subfolder collapsed');
+  eq(o.children(kids[1].id).map((k) => k.t), ['x', 'y', 'z']);
+  ok(o.isDoc(kids[1].id) && o.isDoc(o.children(kids[0].id)[0].id));
 });
 
 function lastId(o, pid) { const k = o.children(pid); return k.length ? k[k.length - 1].id : null; }

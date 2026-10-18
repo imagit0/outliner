@@ -13,6 +13,8 @@
 // Other outliners simply show a table as caption → rows → cells. Dynalist's
 // notes (_note) are imported as child lines.
 
+import { keysBetween, newId, ROOT } from './model.js';
+
 const attrEsc = (s) =>
   String(s).replace(/[&<>"\n\r\t]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\n': '&#10;', '\r': '&#13;', '\t': '&#9;' })[c]);
 
@@ -98,14 +100,66 @@ export function parseOPML(text) {
   return { title, items };
 }
 
-// Insert parsed items under parentId (in order). Returns the number of nodes.
-export function insertItems(outline, parentId, items) {
-  let count = 0;
-  let after = null;
-  for (const it of items) {
-    const n = outline.insert(parentId, after, it.fields);
-    after = n.id;
-    count += 1 + insertItems(outline, n.id, it.children);
+// Import a folder of OPML files. files: [{ path: 'Top/sub/name.opml', text() }]
+// (path as from a folder picker). OPML files become documents (named by their
+// title, else the file name); folders become folders when they contain OPML
+// somewhere inside. The picked folder becomes a folder at the end of the
+// sidebar. Folders first, then documents, each in natural name order;
+// subfolders start collapsed. Returns { name, docs, lines, failed }.
+export async function importFolder(outline, files) {
+  const tree = { name: 'Imported', dirs: new Map(), files: [] };
+  for (const f of files) {
+    let dir = tree;
+    for (const part of f.path.split('/').slice(0, -1)) {
+      if (!dir.dirs.has(part)) dir.dirs.set(part, { name: part, dirs: new Map(), files: [] });
+      dir = dir.dirs.get(part);
+    }
+    dir.files.push(f);
   }
+  const top = tree.dirs.size === 1 && !tree.files.length ? [...tree.dirs.values()][0] : tree;
+  const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  const fileName = (f) => f.path.split('/').pop();
+  const result = { name: top.name, docs: 0, lines: 0, failed: [] };
+  const build = async (dir, parentId, after, collapsed) => {
+    const folder = outline.insert(parentId, after, { t: dir.name, f: true, c: collapsed });
+    let prev = null;
+    for (const sub of [...dir.dirs.values()].sort((a, b) => byName(a.name, b.name))) {
+      prev = (await build(sub, folder.id, prev, true)).id;
+    }
+    for (const f of [...dir.files].sort((a, b) => byName(fileName(a), fileName(b)))) {
+      try {
+        const { title, items } = parseOPML(await f.text());
+        const doc = outline.insert(folder.id, prev, { t: title || fileName(f).replace(/\.(opml|xml)$/i, '') });
+        prev = doc.id;
+        result.lines += insertItems(outline, doc.id, items);
+        result.docs++;
+      } catch (err) {
+        result.failed.push(`${f.path}: ${err.message}`);
+      }
+    }
+    return folder;
+  };
+  await build(top, ROOT, outline.children(ROOT).at(-1)?.id ?? null, false);
+  return result;
+}
+
+// Insert parsed items (in order) as the first children of parentId. Returns
+// the number of nodes. Builds the nodes directly with evenly spaced keys, so
+// importing tens of thousands of lines is fast and keys stay short.
+export function insertItems(outline, parentId, items) {
+  const first = outline.children(parentId)[0];
+  const now = Date.now();
+  let count = 0;
+  const add = (pid, list, before) => {
+    const keys = keysBetween(null, before, list.length);
+    list.forEach((it, i) => {
+      const n = { id: newId(), p: pid, k: keys[i], t: '', d: false, c: false, m: now, ...it.fields };
+      outline.nodes[n.id] = n;
+      count++;
+      add(n.id, it.children || [], null);
+    });
+  };
+  add(parentId, items, first ? first.k : null);
+  outline.invalidate();
   return count;
 }

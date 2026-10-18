@@ -55,6 +55,17 @@ export function keyBetween(a, b) {
   return midpoint(a, b === undefined ? null : b);
 }
 
+// n keys strictly between a and b, in order, spread evenly so they stay short
+// (about log62(n) characters) even for thousands of siblings — appending one
+// at a time with keyBetween would make them grow with every key.
+export function keysBetween(a, b, n) {
+  if (n <= 0) return [];
+  const mid = keyBetween(a, b);
+  if (n === 1) return [mid];
+  const left = Math.floor((n - 1) / 2);
+  return [...keysBetween(a, mid, left), mid, ...keysBetween(mid, b, n - 1 - left)];
+}
+
 export function newId() {
   const bytes = crypto.getRandomValues(new Uint8Array(10));
   let s = '';
