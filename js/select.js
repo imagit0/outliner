@@ -14,6 +14,22 @@
 //
 // These methods are mixed into UI (see the bottom of ui.js).
 
+// Item fields that travel through copy/paste (not position or folder flag).
+const CLIP_FIELDS = ['t', 'd', 'c', 'cl', 'h', 'tb', 'cw', 'hd', 'nb'];
+const escHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// Items copied by this app, if the clipboard HTML carries them.
+export function clipItems(html) {
+  const m = /data-outliner-clip="([^"]*)"/.exec(html || '');
+  if (!m) return null;
+  try {
+    const items = JSON.parse(decodeURIComponent(m[1]));
+    return Array.isArray(items) && items.length ? items : null;
+  } catch {
+    return null;
+  }
+}
+
 const lastChildId = (o, pid) => {
   const k = o.children(pid);
   return k.length ? k[k.length - 1].id : null;
@@ -221,9 +237,20 @@ export const selectMethods = {
   },
 
   // Copy / cut as indented text (2 spaces per level), children included.
+  // The HTML version also carries the full items (collapsed, colors,
+  // headings, done, tables) so pasting back into the outliner is exact.
   lineSelCopy(e, cut) {
     if (!this.lineSel || e.target.closest?.('input, textarea, .text:focus')) return;
     const top = this.lineSelTop();
+    const tree = (id) => {
+      const n = this.o.get(id);
+      const fields = {};
+      for (const f of CLIP_FIELDS) if (n[f] !== undefined && n[f] !== '' && n[f] !== false && n[f] !== 0) fields[f] = n[f];
+      return { fields, children: this.o.children(id).map((k) => tree(k.id)) };
+    };
+    const items = top.map(tree);
+    const htmlList = (list) => `<ul>${list.map((it) => `<li>${escHtml(it.fields.t || '')}${it.children.length ? htmlList(it.children) : ''}</li>`).join('')}</ul>`;
+    e.clipboardData.setData('text/html', `<div data-outliner-clip="${encodeURIComponent(JSON.stringify(items))}">${htmlList(items)}</div>`);
     const lines = [];
     const walk = (id, depth) => {
       const n = this.o.get(id);

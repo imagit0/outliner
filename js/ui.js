@@ -14,7 +14,8 @@ import { load, save } from './store.js';
 import { Drag } from './drag.js';
 import { tableMethods } from './table.js';
 import { Menu } from './menu.js';
-import { selectMethods } from './select.js';
+import { insertItems } from './opml.js';
+import { selectMethods, clipItems } from './select.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -640,6 +641,35 @@ export class UI {
     });
   }
 
+  // Paste lines copied from this app after the current line (or as the first
+  // lines when pasting into the title). An empty current line is replaced.
+  pasteItems(id, items) {
+    const clean = (it) => {
+      const f = it && typeof it.fields === 'object' ? it.fields : {};
+      const fields = { t: typeof f.t === 'string' ? f.t.replace(/\n/g, ' ') : '' };
+      for (const k of ['d', 'c', 'tb', 'hd', 'nb']) if (f[k] === true) fields[k] = true;
+      if (Number.isInteger(f.cl) && f.cl >= 1 && f.cl <= 6) fields.cl = f.cl;
+      if (Number.isInteger(f.h) && f.h >= 1 && f.h <= 3) fields.h = f.h;
+      if (typeof f.cw === 'string' && /^[\d,]*$/.test(f.cw)) fields.cw = f.cw;
+      return { fields, children: Array.isArray(it?.children) ? it.children.map(clean) : [] };
+    };
+    const tree = items.map(clean);
+    this.op(() => {
+      const n = this.o.get(id);
+      const intoTitle = id === this.zoom;
+      const replace = !intoTitle && !n.t && !this.o.hasChildren(id);
+      let after = intoTitle ? null : id;
+      let last = null;
+      for (const it of tree) {
+        last = this.o.insert(intoTitle ? id : n.p, after, it.fields);
+        insertItems(this.o, last.id, it.children);
+        after = last.id;
+      }
+      if (replace) this.o.remove(id);
+      return last ? { id: last.id, off: 'end' } : null;
+    });
+  }
+
   // ---------- moving (drag and drop) ----------
 
   // Move src to just before / after target among target's siblings, or into
@@ -1003,6 +1033,14 @@ export class UI {
       const el = e.target.closest && e.target.closest('.text');
       if (!el) return;
       if (el.dataset.new !== undefined) this.materialize(el);
+      // Lines copied from this app: rebuild them exactly (collapsed state,
+      // colors, headings, tables…).
+      const items = !el.classList.contains('cell') && clipItems(e.clipboardData.getData('text/html'));
+      if (items) {
+        e.preventDefault();
+        this.syncText(el);
+        return this.pasteItems(el.dataset.id, items);
+      }
       const text = e.clipboardData.getData('text/plain');
       if (!text.includes('\n')) return;
       e.preventDefault();
