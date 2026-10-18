@@ -48,15 +48,14 @@
     <button id="m-export-txt" type="button">Export as text</button>
     <button id="m-export-opml" type="button">Export document as OPML</button>
     <button id="m-import" type="button">Import backup…</button>
-    <button id="m-import-opml" type="button">Import OPML as new document…</button>
-    <button id="m-import-folder" type="button">Import folder of OPML files…</button>
+    <button id="m-import-opml" type="button">Import OPML…</button>
     <hr>
     <button id="m-settings" type="button">Settings…</button>
     <button id="m-help" type="button">Keyboard shortcuts</button>
     <button id="m-disconnect" type="button">Disconnect Dropbox</button>
   </div>
   <input id="import-file" type="file" accept=".json,.gz,application/json,application/gzip" hidden>
-  <input id="import-opml" type="file" accept=".opml,.xml,text/xml,text/x-opml" hidden>
+  <input id="import-opml" type="file" accept=".opml,.xml,text/xml,text/x-opml" multiple hidden>
   <input id="import-folder" type="file" webkitdirectory multiple hidden>
 
   <main id="outline"></main>
@@ -116,6 +115,17 @@
   <div id="table-head" hidden></div>
   <div id="img-pop" hidden><img alt=""></div>
   <div id="toast" role="status" hidden></div>
+
+  <dialog id="import">
+    <h2>Import OPML</h2>
+    <p>Each OPML file becomes a document; each folder becomes a folder, with everything inside it imported too. They're added at the end of the sidebar.</p>
+    <div class="import-buttons">
+      <button id="import-pick-files" type="button">Choose files…</button>
+      <button id="import-pick-folder" type="button">Choose a folder…</button>
+    </div>
+    <p class="hint">Or drag any mix of OPML files and folders onto the window.</p>
+    <button id="import-cancel" type="button">Cancel</button>
+  </dialog>
 
   <dialog id="move">
     <h2>Move to document</h2>

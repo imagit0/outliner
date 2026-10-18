@@ -100,14 +100,17 @@ export function parseOPML(text) {
   return { title, items };
 }
 
-// Import a folder of OPML files. files: [{ path: 'Top/sub/name.opml', text() }]
-// (path as from a folder picker). OPML files become documents (named by their
-// title, else the file name); folders become folders when they contain OPML
-// somewhere inside. The picked folder becomes a folder at the end of the
-// sidebar. Folders first, then documents, each in natural name order;
-// subfolders start collapsed. Returns { name, docs, lines, failed }.
-export async function importFolder(outline, files) {
-  const tree = { name: 'Imported', dirs: new Map(), files: [] };
+// Import OPML files and folders. files: [{ path, text() }] where path is
+// relative to what was picked: 'Notes.opml' for a picked file,
+// 'Work/sub/Plan.opml' for a file inside a picked folder 'Work'.
+// Each OPML file becomes a document (named by its title, else the file
+// name); each folder becomes a folder if it contains OPML somewhere inside.
+// Everything is added at the end of the sidebar; folders first, then
+// documents, in natural name order; folders below the top level start
+// collapsed. Returns { docs, folders, lines, failed, first } (first = the
+// first document created).
+export async function importFiles(outline, files) {
+  const tree = { dirs: new Map(), files: [] };
   for (const f of files) {
     let dir = tree;
     for (const part of f.path.split('/').slice(0, -1)) {
@@ -116,31 +119,62 @@ export async function importFolder(outline, files) {
     }
     dir.files.push(f);
   }
-  const top = tree.dirs.size === 1 && !tree.files.length ? [...tree.dirs.values()][0] : tree;
   const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
   const fileName = (f) => f.path.split('/').pop();
-  const result = { name: top.name, docs: 0, lines: 0, failed: [] };
-  const build = async (dir, parentId, after, collapsed) => {
-    const folder = outline.insert(parentId, after, { t: dir.name, f: true, c: collapsed });
-    let prev = null;
+  const result = { docs: 0, folders: 0, lines: 0, failed: [], first: null };
+  // Fill `parentId` (after `after`) with dir's folders and documents.
+  const fill = async (dir, parentId, after, depth) => {
+    let prev = after;
     for (const sub of [...dir.dirs.values()].sort((a, b) => byName(a.name, b.name))) {
-      prev = (await build(sub, folder.id, prev, true)).id;
+      const folder = outline.insert(parentId, prev, { t: sub.name, f: true, c: depth > 0 });
+      result.folders++;
+      await fill(sub, folder.id, null, depth + 1);
+      prev = folder.id;
     }
     for (const f of [...dir.files].sort((a, b) => byName(fileName(a), fileName(b)))) {
       try {
         const { title, items } = parseOPML(await f.text());
-        const doc = outline.insert(folder.id, prev, { t: title || fileName(f).replace(/\.(opml|xml)$/i, '') });
+        const doc = outline.insert(parentId, prev, { t: title || fileName(f).replace(/\.(opml|xml)$/i, '') });
         prev = doc.id;
         result.lines += insertItems(outline, doc.id, items);
         result.docs++;
+        result.first ||= doc.id;
       } catch (err) {
         result.failed.push(`${f.path}: ${err.message}`);
       }
     }
-    return folder;
   };
-  await build(top, ROOT, outline.children(ROOT).at(-1)?.id ?? null, false);
+  await fill(tree, ROOT, outline.children(ROOT).at(-1)?.id ?? null, 0);
   return result;
+}
+
+// Files dropped from the desktop (any mix of files and folders), as
+// [{ path, text() }] for importFiles. Only .opml / .xml files are kept.
+// Must be called during the drop event (the browser forgets the items after).
+export function droppedFiles(dataTransfer) {
+  const entries = [...dataTransfer.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  const isOpml = (name) => /\.(opml|xml)$/i.test(name);
+  if (!entries.length) {
+    // No folder access (older browsers): just the dropped files themselves.
+    return Promise.resolve([...dataTransfer.files].filter((f) => isOpml(f.name)).map((f) => ({ path: f.name, text: () => f.text() })));
+  }
+  const out = [];
+  const walk = async (entry, prefix) => {
+    if (entry.isFile) {
+      if (!isOpml(entry.name)) return;
+      const file = await new Promise((res, rej) => entry.file(res, rej));
+      out.push({ path: prefix + entry.name, text: () => file.text() });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      // readEntries returns the folder's contents in batches until empty.
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e, `${prefix}${entry.name}/`);
+      }
+    }
+  };
+  return Promise.all(entries.map((e) => walk(e, ''))).then(() => out);
 }
 
 // Insert parsed items (in order) as the first children of parentId. Returns

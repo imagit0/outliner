@@ -409,6 +409,21 @@ body.col-resizing { user-select: none; }
 }
 #toast[hidden] { display: none; }
 
+#import { width: min(460px, calc(100vw - 32px)); }
+#import .import-buttons { display: flex; gap: 8px; margin: 14px 0; }
+#import .import-buttons button { flex: 1; padding: 10px; font-weight: 600; }
+#import .hint { font-size: 13px; color: var(--muted); }
+
+/* Dragging files from the desktop over the window. */
+body.file-drop::after {
+  content: "Drop OPML files or folders to import";
+  position: fixed; inset: 12px; z-index: 90; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 600; color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border: 3px dashed var(--accent); border-radius: 16px;
+}
+
 #move { width: min(440px, calc(100vw - 32px)); }
 #move input {
   width: 100%; padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg);

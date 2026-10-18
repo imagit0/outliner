@@ -8,7 +8,7 @@
 import { keyBetween, keysBetween, Outline, ROOT, sameNodes } from '../js/model.js';
 import { merge } from '../js/merge.js';
 import { format } from '../js/format.js';
-import { exportOPML, parseOPML, insertItems, importFolder } from '../js/opml.js';
+import { exportOPML, parseOPML, insertItems, importFiles } from '../js/opml.js';
 import { syncTests } from './sync-tests.js';
 
 const out = document.getElementById('out');
@@ -232,27 +232,31 @@ test('importing 20,000 lines is fast', () => {
   eq(o.children(o.children(d.id)[5].id).map((n) => n.t)[8], 'sub 5.8');
 });
 
-test('import folder: OPML files become documents, folders become folders', async () => {
+test('import OPML: picked files become documents, picked folders become folders', async () => {
   const opml = (title, lines) => `<?xml version="1.0"?><opml version="2.0"><head><title>${title}</title></head><body>${lines.map((l) => `<outline text="${l}"/>`).join('')}</body></opml>`;
+  // A mix, as from drag and drop: two loose files plus a folder "Notes".
   const files = [
+    ['Inbox.opml', opml('Inbox', ['i1'])],
+    ['Archive 2024.opml', opml('', ['old'])],
     ['Notes/Work/Project 10.opml', opml('Project 10', ['a', 'b'])],
     ['Notes/Work/Project 2.opml', opml('Project 2', ['c'])],
     ['Notes/Home.opml', opml('', ['x', 'y', 'z'])],
-    ['Notes/Empty folder/readme.txt', 'not opml'],
     ['Notes/Broken.opml', '<opml><body><outline'],
-  ].filter(([p]) => /\.opml$/.test(p)).map(([path, text]) => ({ path, text: async () => text }));
+  ].map(([path, text]) => ({ path, text: async () => text }));
   const o = new Outline();
   o.insert(ROOT, null, { t: 'existing doc' });
-  const r = await importFolder(o, files);
-  eq([r.name, r.docs, r.lines, r.failed.length], ['Notes', 3, 6, 1]);
-  const [existing, notes] = o.children(ROOT);
-  eq([existing.t, notes.t, notes.f], ['existing doc', 'Notes', true]);
+  const r = await importFiles(o, files);
+  eq([r.docs, r.folders, r.lines, r.failed.length], [5, 2, 8, 1]);
+  // Root: existing, then folders first, then documents (natural order).
+  eq(o.children(ROOT).map((k) => k.t + (k.f ? '/' : '')), ['existing doc', 'Notes/', 'Archive 2024', 'Inbox']);
+  const notes = o.children(ROOT)[1];
+  eq(notes.c, false, 'top-level folder open');
   const kids = o.children(notes.id);
-  eq(kids.map((k) => k.t + (k.f ? '/' : '')), ['Work/', 'Home']); // folders first; Home named from the file
+  eq(kids.map((k) => k.t + (k.f ? '/' : '')), ['Work/', 'Home']); // Home named from the file
   eq(o.children(kids[0].id).map((k) => k.t), ['Project 2', 'Project 10']); // natural order
-  eq(kids[0].c, true, 'subfolder collapsed');
+  eq(kids[0].c, true, 'deeper folder collapsed');
   eq(o.children(kids[1].id).map((k) => k.t), ['x', 'y', 'z']);
-  ok(o.isDoc(kids[1].id) && o.isDoc(o.children(kids[0].id)[0].id));
+  eq(o.get(r.first).t, 'Project 2', 'first document created');
 });
 
 function lastId(o, pid) { const k = o.children(pid); return k.length ? k[k.length - 1].id : null; }

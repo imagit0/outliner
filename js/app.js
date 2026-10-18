@@ -5,7 +5,7 @@ import { UI } from './ui.js';
 import { Sync } from './sync.js';
 import * as dropbox from './dropbox.js';
 import { load, save, requestPersistence } from './store.js';
-import { exportOPML, parseOPML, insertItems, importFolder } from './opml.js';
+import { exportOPML, importFiles, droppedFiles } from './opml.js';
 import { backup } from './backup.js';
 import { setInlineImages } from './format.js';
 import { LocalStore } from './local.js';
@@ -195,9 +195,7 @@ menu.addEventListener('click', async (e) => {
     case 'm-export-opml':
       return exportDocOPML(outline.docOf(ui.zoom).id);
     case 'm-import-opml':
-      return $('#import-opml').click();
-    case 'm-import-folder':
-      return $('#import-folder').click();
+      return $('#import').showModal();
     case 'm-help':
       return $('#help').showModal();
     case 'm-settings':
@@ -225,41 +223,69 @@ $('#import-file').addEventListener('change', async (e) => {
   }
 });
 
-$('#import-opml').addEventListener('change', async (e) => {
-  const f = e.target.files[0];
-  e.target.value = '';
-  if (!f) return;
-  try {
-    const { title, items } = parseOPML(await f.text());
-    ui.checkpoint();
-    const cur = outline.docOf(ui.zoom);
-    const name = title || f.name.replace(/\.(opml|xml)$/i, '');
-    const doc = cur ? outline.insert(cur.p, cur.id, { t: name }) : outline.insert(ROOT, null, { t: name });
-    const count = insertItems(outline, doc.id, items);
-    ui.onChange();
-    ui.openDoc(doc.id);
-    ui.toast(`Imported ${count} item${count === 1 ? '' : 's'} into “${name}”`);
-  } catch (err) {
-    alert(`OPML import failed: ${err.message}`);
-  }
-});
-
-// Import a folder: OPML files become documents, subfolders (that contain
-// OPML somewhere inside) become folders. The picked folder itself becomes a
-// folder at the end of the sidebar.
-$('#import-folder').addEventListener('change', async (e) => {
-  const files = [...e.target.files]
-    .filter((f) => /\.(opml|xml)$/i.test(f.name))
-    .map((f) => ({ path: f.webkitRelativePath || f.name, text: () => f.text() }));
-  e.target.value = '';
-  if (!files.length) return alert('No OPML files found in that folder.');
+// ---------- Import OPML (files, a folder, or drag and drop) ----------
+// Each OPML file becomes a document, each folder a folder (scanned
+// recursively); all added at the end of the sidebar. One undo step.
+async function importOPMLFiles(files) {
+  files = files.filter((f) => /\.(opml|xml)$/i.test(f.path));
+  if (!files.length) return alert('No OPML files found.');
   ui.toast(`Importing ${files.length} file${files.length === 1 ? '' : 's'}…`);
   ui.checkpoint();
-  const r = await importFolder(outline, files);
+  const r = await importFiles(outline, files);
+  if (!r.docs && !r.folders) ui.undoStack.pop(); // nothing happened
   ui.onChange();
-  ui.render();
-  ui.toast(`Imported ${r.docs} document${r.docs === 1 ? '' : 's'} (${r.lines} lines) into folder “${r.name}”`);
+  if (r.first) ui.openDoc(r.first);
+  else ui.render();
+  const parts = [`${r.docs} document${r.docs === 1 ? '' : 's'}`];
+  if (r.folders) parts.push(`${r.folders} folder${r.folders === 1 ? '' : 's'}`);
+  ui.toast(`Imported ${parts.join(' and ')} (${r.lines} lines)`);
   if (r.failed.length) alert(`These files could not be imported:\n\n${r.failed.join('\n')}`);
+}
+
+const pickedFiles = (input) => [...input.files].map((f) => ({ path: f.webkitRelativePath || f.name, text: () => f.text() }));
+$('#import-opml').addEventListener('change', (e) => {
+  const files = pickedFiles(e.target);
+  e.target.value = '';
+  $('#import').close();
+  if (files.length) importOPMLFiles(files);
+});
+$('#import-folder').addEventListener('change', (e) => {
+  const files = pickedFiles(e.target);
+  e.target.value = '';
+  $('#import').close();
+  if (files.length) importOPMLFiles(files);
+});
+$('#import-pick-files').addEventListener('click', () => $('#import-opml').click());
+$('#import-pick-folder').addEventListener('click', () => $('#import-folder').click());
+$('#import-cancel').addEventListener('click', () => $('#import').close());
+
+// Drag OPML files and folders from the desktop onto the window.
+const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+let dragDepth = 0;
+document.addEventListener('dragenter', (e) => {
+  if (!isFileDrag(e)) return;
+  dragDepth++;
+  document.body.classList.add('file-drop');
+});
+document.addEventListener('dragleave', (e) => {
+  if (!isFileDrag(e)) return;
+  if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('file-drop'); }
+});
+document.addEventListener('dragover', (e) => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+});
+document.addEventListener('drop', async (e) => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('file-drop');
+  try {
+    importOPMLFiles(await droppedFiles(e.dataTransfer));
+  } catch (err) {
+    alert(`Import failed: ${err.message}`);
+  }
 });
 
 $('#help-close').addEventListener('click', () => $('#help').close());
