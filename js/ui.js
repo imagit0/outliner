@@ -838,15 +838,11 @@ export class UI {
   deleteCompleted() {
     const done = this.descendants(this.zoom).filter((n) => n.d && !this.o.ancestors(n.id).some((a) => a.d && this.o.isAncestor(this.zoom, a.id)));
     if (!done.length) return this.toast('No completed items here');
-    const under = done.reduce((s, n) => s + this.descendants(n.id).length, 0);
-    const msg = `Delete ${done.length} completed item${done.length === 1 ? '' : 's'}` +
-      (under ? ` (and ${under} line${under === 1 ? '' : 's'} under them)` : '') + '?\n\n(Undo brings them back.)';
-    if (!confirm(msg)) return;
     this.op(() => {
       for (const n of done) this.o.remove(n.id);
       return null;
     });
-    this.toast(`Deleted ${done.length} completed item${done.length === 1 ? '' : 's'}`);
+    this.toast(`Deleted ${done.length} completed item${done.length === 1 ? '' : 's'} (Ctrl+Z to undo)`);
   }
 
   setAllCollapsed(c) {

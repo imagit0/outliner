@@ -136,7 +136,10 @@
   <div id="drop-line" hidden></div>
 
   <dialog id="help">
-    <h2 tabindex="-1" autofocus>Keyboard shortcuts</h2>
+    <div class="dlg-head">
+      <h2 tabindex="-1" autofocus>Keyboard shortcuts</h2>
+      <button id="help-close" class="dlg-x" type="button" aria-label="Close" title="Close (Esc)">×</button>
+    </div>
     <table class="keys">
       <tr><th colspan="2">Editing</th></tr>
       <tr><td>New item (splits at the cursor)</td><td>Enter</td></tr>
@@ -189,7 +192,6 @@
     </table>
     <p>Formatting: <code>**bold**</code>, <code>__italic__</code>, <code>~~strike~~</code>, <code>==highlight==</code>, <code>`code`</code>, <code>[text](https://…)</code> links and plain web addresses. Put <code>!</code> in front of an image link — <code>![caption](https://…/pic.jpg)</code> or <code>!https://…/pic.jpg</code> — to preview the image on hover (tap on a phone).</p>
     <p>On a phone, the <b>Aa</b> button on the bottom toolbar has colors, headings, text styles, links and tables.</p>
-    <button id="help-close" type="button">Close</button>
   </dialog>
 
   <dialog id="settings">

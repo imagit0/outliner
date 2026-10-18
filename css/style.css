@@ -491,7 +491,19 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, .35); }
 dialog h2 { margin-top: 0; font-size: 1.2em; }
-#help { width: min(860px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); }
+#help { width: min(860px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 48px); padding-top: 0; }
+/* Title row that stays put while the list scrolls, with a × to close. */
+.dlg-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 -1em; padding: 14px 1em 10px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.dlg-head h2 { margin: 0; }
+dialog .dlg-x {
+  flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px;
+  background: none; color: var(--muted); font-size: 24px; line-height: 32px;
+}
+dialog .dlg-x:hover { background: var(--hover); color: var(--fg); }
 .keys { width: 100%; border-collapse: collapse; }
 .keys th { text-align: left; padding: 14px 0 4px; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
 .keys tr:first-child th { padding-top: 0; }
