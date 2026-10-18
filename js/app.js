@@ -8,6 +8,8 @@ import { load, save, requestPersistence } from './store.js';
 import { exportOPML, parseOPML, insertItems } from './opml.js';
 import { backup } from './backup.js';
 import { setInlineImages } from './format.js';
+import { LocalStore } from './local.js';
+import { gunzip, isGzip } from './shards.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -45,7 +47,15 @@ function applyAppearance() {
 applyAppearance();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyAppearance);
 
-let nodes = load('doc');
+// The outline lives in IndexedDB (one record per document; see local.js).
+const localStore = new LocalStore();
+let nodes = null;
+try {
+  nodes = await localStore.load();
+} catch (e) {
+  console.error('could not load the outline', e);
+  alert(`Could not load your outline from this device's storage: ${e.message}`);
+}
 let outline;
 if (nodes && nodes[ROOT]) {
   outline = new Outline(nodes);
@@ -59,7 +69,10 @@ let saveTimer = null;
 function persistNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
-  if (!save('doc', outline.nodes)) setStatus('error', 'Could not save locally');
+  localStore.save(outline.nodes).catch((e) => {
+    console.error('save failed', e);
+    setStatus('error', 'Could not save on this device');
+  });
 }
 function persistSoon() {
   clearTimeout(saveTimer);
@@ -86,6 +99,7 @@ const sync = new Sync({
   },
   onStatus: setStatus,
 });
+await sync.init();
 
 // ---------- sync status ----------
 const STATUS = {
@@ -110,9 +124,8 @@ function setStatus(state, detail = '') {
 // After a successful sync, back up the synced outline once a day.
 let backingUp = false;
 async function runBackup(force = false) {
-  if (backingUp) return;
-  const nodes = load('base');
-  if (!nodes) return;
+  if (backingUp || !Object.keys(sync.base).length) return; // nothing synced yet
+  const nodes = sync.baseNodes();
   backingUp = true;
   try {
     const r = await backup(nodes, prefs.backupKeep, force);
@@ -195,7 +208,9 @@ $('#import-file').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!f) return;
   try {
-    const imported = parseDoc(await f.text());
+    // Backups are compressed (.json.gz); older ones and exports are plain.
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const imported = parseDoc(isGzip(bytes) ? await gunzip(bytes) : new TextDecoder().decode(bytes));
     if (!confirm(`Replace the whole outline with ${f.name}? (Undo is available.)`)) return;
     ui.checkpoint();
     outline.restore(imported);
@@ -365,7 +380,7 @@ setInterval(() => {
 // ---------- start ----------
 (async () => {
   try {
-    if (await dropbox.handleRedirect()) sync.forget();
+    if (await dropbox.handleRedirect()) await sync.forget();
   } catch (e) {
     alert(`Dropbox sign-in failed: ${e.message}`);
   }

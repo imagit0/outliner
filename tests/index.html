@@ -9,12 +9,18 @@ import { keyBetween, Outline, ROOT, sameNodes } from '../js/model.js';
 import { merge } from '../js/merge.js';
 import { format } from '../js/format.js';
 import { exportOPML, parseOPML, insertItems } from '../js/opml.js';
+import { syncTests } from './sync-tests.js';
 
 const out = document.getElementById('out');
 let pass = 0, fail = 0;
-function test(name, fn) {
-  try { fn(); pass++; out.innerHTML += `<span class="ok">✓ ${name}</span>\n`; }
-  catch (e) { fail++; out.innerHTML += `<span class="fail">✗ ${name}: ${e.message}</span>\n`; console.error(e); }
+const queue = [];
+// Tests run in order at the end; a test may be async.
+function test(name, fn) { queue.push([name, fn]); }
+async function runAll() {
+  for (const [name, fn] of queue) {
+    try { await fn(); pass++; out.innerHTML += `<span class="ok">✓ ${name}</span>\n`; }
+    catch (e) { fail++; out.innerHTML += `<span class="fail">✗ ${name}: ${e.message}</span>\n`; console.error(e); }
+  }
 }
 const eq = (a, b, msg = '') => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg} expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
 const ok = (c, msg) => { if (!c) throw new Error(msg || 'assertion failed'); };
@@ -337,6 +343,8 @@ test('format keeps raw text as textContent', () => {
   eq(d.querySelectorAll('i, b').length, 1, 'single * is plain text');
 });
 
+syncTests(test, { eq, ok });
+await runAll();
 out.innerHTML += `\n${pass} passed, ${fail} failed\n`;
 document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
 </script>

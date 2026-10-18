@@ -181,12 +181,96 @@ export async function deleteFile(path) {
   await rpc('files/delete_v2', { path });
 }
 
+// ---- per-document sync (v2) ----
+
+export class ResetError extends Error {}
+
+// Every file under `path` (recursive): { entries, cursor }, or null if the
+// folder doesn't exist. Entries: { tag: 'file'|'deleted'|'folder', path, rev }.
+export async function listAll(path) {
+  let page;
+  try {
+    page = await rpc('files/list_folder', { path, recursive: true });
+  } catch (e) {
+    if (e.summary && e.summary.startsWith('path/not_found')) return null;
+    throw e;
+  }
+  const entries = [...page.entries];
+  while (page.has_more) {
+    page = await rpc('files/list_folder/continue', { cursor: page.cursor });
+    entries.push(...page.entries);
+  }
+  return { entries: entries.map(entry), cursor: page.cursor };
+}
+
+// What changed since `cursor`: { entries, cursor }. ResetError if Dropbox
+// says the cursor is too old (then list everything again).
+export async function listSince(cursor) {
+  const entries = [];
+  let page = { cursor, has_more: true };
+  while (page.has_more) {
+    try {
+      page = await rpc('files/list_folder/continue', { cursor: page.cursor });
+    } catch (e) {
+      if (e.summary && e.summary.startsWith('reset')) throw new ResetError(e.summary);
+      throw e;
+    }
+    entries.push(...page.entries);
+  }
+  return { entries: entries.map(entry), cursor: page.cursor };
+}
+
+const entry = (e) => ({ tag: e['.tag'], path: e.path_display || e.path_lower, rev: e.rev || null });
+
+// { bytes, rev } or null if missing.
+export async function getBytes(path) {
+  const res = await call(`${CONTENT}/files/download`, { 'Dropbox-API-Arg': apiArg({ path }) });
+  if (res.status === 409) {
+    const err = await res.json().catch(() => ({}));
+    if (String(err.error_summary || '').startsWith('path/not_found')) return null;
+    throw new Error(`download: ${err.error_summary || 409}`);
+  }
+  if (!res.ok) throw new Error(`download ${res.status}`);
+  const meta = JSON.parse(res.headers.get('Dropbox-API-Result') || '{}');
+  return { bytes: new Uint8Array(await res.arrayBuffer()), rev: meta.rev || null };
+}
+
+// Write only if the file is still at `rev` (or absent, when rev is null).
+// ConflictError otherwise. Returns the new rev.
+export async function putBytes(path, bytes, rev) {
+  const arg = { path, mode: rev ? { '.tag': 'update', update: rev } : { '.tag': 'add' }, autorename: false, mute: true };
+  const res = await call(`${CONTENT}/files/upload`, { 'Dropbox-API-Arg': apiArg(arg), 'Content-Type': 'application/octet-stream' }, bytes);
+  if (res.status === 409) {
+    const err = await res.json().catch(() => ({}));
+    if (String(err.error_summary || '').includes('conflict')) throw new ConflictError(err.error_summary);
+    throw new Error(`upload: ${err.error_summary || 409}`);
+  }
+  if (!res.ok) throw new Error(`upload ${res.status}`);
+  return (await res.json()).rev;
+}
+
+// Delete only if still at `rev`. Missing file is fine.
+export async function deleteRev(path, rev) {
+  try {
+    await rpc('files/delete_v2', rev ? { path, parent_rev: rev } : { path });
+  } catch (e) {
+    if (e.summary && e.summary.startsWith('path_lookup/not_found')) return;
+    if (e.summary && e.summary.includes('conflict')) throw new ConflictError(e.summary);
+    throw e;
+  }
+}
+
+export async function moveFile(from, to) {
+  await rpc('files/move_v2', { from_path: from, to_path: to, autorename: true });
+}
+
 // ---- change notifications ----
 // A cursor marks a point in the app folder's history; longpoll() holds the
 // request open until something changes after it (or the timeout passes).
 
+// Cursor for the whole app folder (recursive), for change notifications.
 export async function latestCursor() {
-  return (await rpc('files/list_folder/get_latest_cursor', { path: '', recursive: false })).cursor;
+  return (await rpc('files/list_folder/get_latest_cursor', { path: '', recursive: true })).cursor;
 }
 
 // Resolves { changes: bool, backoff?: seconds }. Needs no auth.

@@ -1,14 +1,15 @@
-// Daily backups to Dropbox: /backups/outline-YYYY-MM-DD.json in the app
-// folder. A web app can't run in the background, so "daily" means: the
+// Daily backups to Dropbox: /backups/outline-YYYY-MM-DD.json.gz (compressed;
+// older ones are plain .json) in the app folder. A web app can't run in the background, so "daily" means: the
 // first successful sync of each day, on whichever device gets there first.
 // Older backups beyond the chosen number of days are deleted.
 
 import * as dropbox from './dropbox.js';
 import { FORMAT } from './model.js';
 import { load, save } from './store.js';
+import { gzip } from './shards.js';
 
 const DIR = '/backups';
-const NAME = /^outline-(\d{4}-\d{2}-\d{2})\.json$/;
+const NAME = /^outline-(\d{4}-\d{2}-\d{2})\.json(\.gz)?$/;
 
 // Local date as YYYY-MM-DD.
 export function today() {
@@ -23,10 +24,10 @@ export async function backup(nodes, keep, force = false) {
   if (!keep || !dropbox.isConnected()) return 'off';
   const day = today();
   if (!force && load('lastBackup') === day) return 'exists';
-  const text = JSON.stringify({ format: FORMAT, nodes });
+  const bytes = await gzip(JSON.stringify({ format: FORMAT, nodes }));
   let result = 'saved';
   try {
-    await dropbox.putFile(`${DIR}/outline-${day}.json`, text, force);
+    await dropbox.putFile(`${DIR}/outline-${day}.json.gz`, bytes, force);
   } catch (e) {
     if (!(e instanceof dropbox.ConflictError)) throw e;
     result = 'exists';

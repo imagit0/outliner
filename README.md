@@ -34,13 +34,20 @@ Keyboard shortcuts are listed in the app (☰ → Keyboard shortcuts).
 
 ## How sync works
 
-The whole outline is one file, `Apps/<your app name>/outline.json`, in your Dropbox. Each device keeps:
+In Dropbox (`Apps/<your app name>/v2/`), the outline is split into one gzip-compressed file per document (`docs/<id>.json.gz`) plus `index.json.gz` for the sidebar (folders, document names and order). Default values are left out, so the files stay small. A small edit uploads only the file of the document it touched, typically a few KB even when the whole outline is several MB.
 
-- its own copy
-- the last version it synced (the "base")
-- that version's Dropbox revision
+Each device keeps its own copy in IndexedDB, one record per document. For each Dropbox file it also keeps the last synced version (the "base") and that file's Dropbox revision.
 
-When a device syncs, it downloads the file. If anyone else changed it since the base, it does a three-way merge, item by item and field by field. It then uploads, but only if the file hasn't changed again in the meantime; otherwise it retries.
+When a device syncs:
+
+1. It asks Dropbox which files changed since last time. When nothing has changed, this tiny listing is all that's transferred.
+2. It downloads only the changed files.
+3. It does a three-way merge over the whole outline, item by item and field by field.
+4. It uploads only the files whose content changed, each only if the file hasn't changed again in the meantime; otherwise it starts over.
+
+Moving a line between documents changes two files. In the rare case of a race, a line can appear twice (never zero times). When it does, the newer copy wins.
+
+The first device to run this layout converts the old single `outline.json` and renames it `outline-before-split.json`.
 
 - Different items edited on two devices: both edits are kept.
 - Same item, different fields (e.g. text on one device, completed on the other): both changes are kept.
@@ -54,7 +61,7 @@ When sync runs:
 - **Other times:** when the app is opened or brought back to the foreground, when the device comes back online, and once a minute as a fallback.
 - **On demand:** Ctrl+S, tapping the sync icon, or ☰ → Sync now.
 
-**Daily backups:** after the first successful sync each day (on whichever device gets there first), the app saves a dated copy to `Apps/<app name>/backups/outline-YYYY-MM-DD.json` and deletes copies older than the chosen number of days. The default is 30 days; Settings has Off, 7, 30, 90 and 365 days, and Keep all. ⋮ → **Back up now** makes or replaces today's copy. To restore, download a backup file from Dropbox and use ⋮ → **Import backup**. Backups only happen when the app is opened (web apps can't run in the background).
+**Daily backups:** after the first successful sync each day (on whichever device gets there first), the app saves a dated, compressed copy to `Apps/<app name>/backups/outline-YYYY-MM-DD.json.gz` and deletes copies older than the chosen number of days. The default is 30 days; Settings has Off, 7, 30, 90 and 365 days, and Keep all. ⋮ → **Back up now** makes or replaces today's copy. To restore, download a backup file from Dropbox and use ⋮ → **Import backup**. Backups only happen when the app is opened (web apps can't run in the background).
 
 Most checks only ask Dropbox for the file's revision. The full file is downloaded only when another device has changed it. Dropbox also keeps 30 days of file history for `outline.json`.
 
@@ -104,7 +111,9 @@ Then open <http://localhost:8000/>. Tests (key ordering, merge, formatting) run 
 |---|---|
 | `js/model.js` | Flat node map, fractional position keys, tree operations |
 | `js/merge.js` | Three-way merge used by sync |
-| `js/sync.js` | Download → merge → conditional upload loop |
+| `js/sync.js` | List changes → download changed files → merge → conditional upload |
+| `js/shards.js` | Per-document split, compact JSON, gzip |
+| `js/local.js`, `js/idb.js` | The outline on the device (IndexedDB) |
 | `js/dropbox.js` | Dropbox PKCE sign-in, download/upload |
 | `js/ui.js` | Rendering, editing, keyboard and toolbar commands |
 | `js/format.js` | Inline formatting (keeps raw text = textContent) |
