@@ -1039,6 +1039,11 @@ export class UI {
       }, 0);
     });
 
+    // Plaintext-only lines report Enter and Shift+Enter alike (as
+    // insertLineBreak), so remember whether Shift was held on the key press.
+    let shiftEnter = false;
+    m.addEventListener('keydown', (e) => { if (e.key === 'Enter') shiftEnter = e.shiftKey; }, true);
+
     m.addEventListener('beforeinput', (e) => {
       const el = e.target;
       if (!el.classList || !el.classList.contains('text')) return;
@@ -1048,10 +1053,12 @@ export class UI {
         case 'insertParagraph':
         case 'insertLineBreak': {
           e.preventDefault();
+          const shift = shiftEnter;
+          shiftEnter = false;
           if (this.o.isCell(id)) return this.cellEnter(id);
           // Enter on an empty line outdents it when it can; Shift+Enter
-          // (insertLineBreak) always starts a new line.
-          if (e.inputType === 'insertParagraph' && !el.textContent && this.outdent(id)) return;
+          // always starts a new line.
+          if (!shift && !el.textContent && this.outdent(id)) return;
           const off = getCaret(el);
           const sel = getSelection();
           if (!sel.isCollapsed) sel.deleteFromDocument();
