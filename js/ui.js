@@ -348,13 +348,14 @@ export class UI {
   outdent(id) {
     const n = this.o.get(id);
     // Never outdent out of the zoomed item or out of a document.
-    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p) || this.o.isCell(id)) return;
+    if (id === this.zoom || n.p === this.zoom || this.o.isDoc(n.p) || this.o.isCell(id)) return false;
     const off = this.caretOf(id);
     this.op(() => {
       const parent = this.o.get(n.p);
       this.o.move(id, parent.p, parent.id);
       return { id, off };
     });
+    return true;
   }
 
   // Ctrl+Shift+Tab: outdent but keep the item's place in the list — the
@@ -1048,6 +1049,9 @@ export class UI {
         case 'insertLineBreak': {
           e.preventDefault();
           if (this.o.isCell(id)) return this.cellEnter(id);
+          // Enter on an empty line outdents it when it can; Shift+Enter
+          // (insertLineBreak) always starts a new line.
+          if (e.inputType === 'insertParagraph' && !el.textContent && this.outdent(id)) return;
           const off = getCaret(el);
           const sel = getSelection();
           if (!sel.isCollapsed) sel.deleteFromDocument();

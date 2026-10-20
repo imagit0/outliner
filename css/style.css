@@ -148,8 +148,13 @@ header {
 .entry.active { background: var(--hover); font-weight: 600; }
 .entry .name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .entry .ico { flex: none; width: 16px; height: 16px; color: var(--muted); }
-.entry.folder .twisty { flex: none; width: 10px; margin-right: -2px; color: var(--muted); font-size: 11px; }
-.entry.folder .twisty::before { content: "▸"; display: inline-block; transition: transform .1s; }
+.entry.folder .twisty { flex: none; width: 10px; margin-right: -2px; display: flex; align-items: center; }
+/* Same triangle as a line with children in the outline (.bullet.kids). */
+.entry.folder .twisty::before {
+  content: ""; width: 0; height: 0; opacity: .7;
+  border-left: 7px solid var(--fg); border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+  transition: transform .1s;
+}
 .entry.folder.open .twisty::before { transform: rotate(90deg); }
 .entry.doc { padding-left: calc(22px + var(--d, 0) * 16px); }
 /* Action buttons float over the end of the name on hover, so showing them
