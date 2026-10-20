@@ -15,6 +15,7 @@ import { VERSION } from './config.js';
 
 const $ = (s) => document.querySelector(s);
 $('#app-version').textContent = VERSION;
+document.title = `Outliner v${VERSION}`; // shown in the installed app's title bar
 
 const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, images: 'hover', ...load('prefs', {}) };
 setInlineImages(prefs.images === 'inline');
