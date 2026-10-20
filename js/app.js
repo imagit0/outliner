@@ -11,8 +11,10 @@ import { setInlineImages } from './format.js';
 import { LocalStore, takeNewerSynced } from './local.js';
 import { idbKV } from './idb.js';
 import { gunzip, isGzip } from './shards.js';
+import { VERSION } from './config.js';
 
 const $ = (s) => document.querySelector(s);
+$('#app-version').textContent = VERSION;
 
 const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, images: 'hover', ...load('prefs', {}) };
 setInlineImages(prefs.images === 'inline');
