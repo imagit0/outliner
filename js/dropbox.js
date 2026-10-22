@@ -50,7 +50,7 @@ export function disconnect() {
 export async function handleRedirect() {
   const q = new URLSearchParams(location.search);
   if (!q.has('code') && !q.has('error')) return false;
-  history.replaceState(null, '', location.pathname + location.hash);
+  history.replaceState(history.state, '', location.pathname + location.hash);
   const verifier = sessionStorage.getItem('ol.pkce');
   sessionStorage.removeItem('ol.pkce');
   if (!q.has('code') || !verifier) return false;

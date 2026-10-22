@@ -47,6 +47,7 @@ export class UI {
     document.body.classList.toggle('side-hidden', !!load('sideHidden'));
     this.menu = new Menu();
     this.bind();
+    this.initNav();
     this.drag = new Drag(this);
     this.zoomFromHash();
   }
@@ -65,7 +66,7 @@ export class UI {
     }
     const last = load('lastDoc');
     this.zoom = docs.some((d) => d.id === last) ? last : docs[0].id;
-    history.replaceState(null, '', location.pathname + location.search + '#' + this.zoom);
+    history.replaceState({ i: this.navI }, '', location.pathname + location.search + '#' + this.zoom);
   }
 
   render() {
@@ -707,9 +708,39 @@ export class UI {
 
   go(id) {
     const hash = '#' + id;
-    if (location.hash !== hash) history.pushState(null, '', location.pathname + location.search + hash);
+    if (location.hash !== hash) {
+      this.navI++;
+      this.navMax = this.navI; // a new view drops the "forward" ones
+      history.pushState({ i: this.navI }, '', location.pathname + location.search + hash);
+      this.updateNav();
+    }
     this.zoomFromHash();
   }
+
+  // ---------- back / forward ----------
+  // Each view (document or zoomed item) is a browser history entry; its
+  // position is kept in history.state so the buttons know when to grey out.
+  // The furthest position survives a reload in sessionStorage.
+
+  initNav() {
+    this.navI = history.state?.i ?? 0;
+    if (history.state?.i === undefined) history.replaceState({ i: 0 }, '');
+    this.navMax = Math.max(this.navI, Number(sessionStorage.getItem('ol.navMax')) || 0);
+    this.backBtn = $('#back-btn');
+    this.fwdBtn = $('#fwd-btn');
+    this.backBtn.addEventListener('click', () => this.back());
+    this.fwdBtn.addEventListener('click', () => this.forward());
+    this.updateNav();
+  }
+
+  updateNav() {
+    try { sessionStorage.setItem('ol.navMax', this.navMax); } catch {}
+    this.backBtn.disabled = this.navI <= 0;
+    this.fwdBtn.disabled = this.navI >= this.navMax;
+  }
+
+  back() { if (this.navI > 0) history.back(); }
+  forward() { if (this.navI < this.navMax) history.forward(); }
 
   zoomTo(id) { this.go(id); }
 
@@ -845,8 +876,12 @@ export class UI {
     });
   }
 
-  setAllCollapsed(c) {
-    const targets = this.descendants(this.zoom).filter((n) => (n.c || false) !== c && this.o.hasChildren(n.id));
+  // Expand or collapse everything under `root` (the zoomed item by default);
+  // a line's own menu includes the line itself.
+  setAllCollapsed(c, root = this.zoom) {
+    const all = this.descendants(root);
+    if (root !== this.zoom) all.unshift(this.o.get(root));
+    const targets = all.filter((n) => (n.c || false) !== c && this.o.hasChildren(n.id));
     if (!targets.length) return;
     this.op(() => {
       for (const n of targets) this.o.update(n.id, { c });
@@ -861,6 +896,8 @@ export class UI {
       { label: 'Zoom in', hint: 'Alt+→', run: () => this.zoomTo(id) },
       { label: n.d ? 'Mark not complete' : 'Mark complete', hint: 'Ctrl+Enter', run: () => this.toggleDone(id) },
       { label: n.c ? 'Expand' : 'Collapse', hint: 'Ctrl+.', run: () => this.setCollapsed(id, !n.c) },
+      { label: 'Expand all', run: () => this.setAllCollapsed(false, id) },
+      { label: 'Collapse all', run: () => this.setAllCollapsed(true, id) },
       'sep',
       { swatches: [1, 2, 3, 4, 5, 6, 0], run: (c) => this.setColor(id, c) },
       { buttons: [
@@ -875,7 +912,8 @@ export class UI {
         ? { label: 'Delete table', danger: true, run: () => this.deleteTable(id) }
         : { label: 'Delete', hint: 'Ctrl+Shift+⌫', danger: true, run: () => this.deleteItem(id) },
     ];
-    if (!this.o.hasChildren(id)) items.splice(2, 1); // nothing to collapse
+    if (!this.o.hasChildren(id)) items.splice(2, 3); // nothing to collapse
+    else if (n.tb) items.splice(3, 2); // a table collapses as a whole
     this.menu.lastKey = id;
     this.menu.open(items, x, y);
   }
@@ -1120,6 +1158,9 @@ export class UI {
         e.preventDefault();
         this.search.focus();
         this.search.select();
+      } else if (mod && !e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        e.preventDefault();
+        if (e.code === 'BracketLeft') this.back(); else this.forward();
       } else if (mod && !e.target.closest?.('.text, input') && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         this.undo(e.shiftKey);
@@ -1146,7 +1187,12 @@ export class UI {
       this.zoomTo(a.dataset.zoom);
     });
 
-    window.addEventListener('popstate', () => this.zoomFromHash());
+    window.addEventListener('popstate', (e) => {
+      this.navI = e.state?.i ?? 0;
+      this.navMax = Math.max(this.navMax, this.navI);
+      this.updateNav();
+      this.zoomFromHash();
+    });
 
     // Sidebar
     $('#side-btn').addEventListener('click', () => this.toggleSidebar());

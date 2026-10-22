@@ -3,4 +3,4 @@
 export const DROPBOX_APP_KEY = 'a3gm2n26kd5xyjo';
 
 // Shown in Settings; keep in step with CACHE in sw.js.
-export const VERSION = 35;
+export const VERSION = 36;

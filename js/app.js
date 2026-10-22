@@ -17,7 +17,7 @@ const $ = (s) => document.querySelector(s);
 $('#app-version').textContent = VERSION;
 document.title = `Outliner v${VERSION}`; // shown in the installed app's title bar
 
-const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, images: 'hover', ...load('prefs', {}) };
+const prefs = { showDone: true, theme: 'dark', font: 'arial', size: 17, showMd: false, spacing: 'auto', backupKeep: 30, images: 'hover', tooltips: false, ...load('prefs', {}) };
 setInlineImages(prefs.images === 'inline');
 const SIZES = [14, 15, 16, 17, 18, 19, 20, 22, 24];
 
@@ -335,6 +335,11 @@ for (const [id, key] of [['#set-theme', 'theme'], ['#set-font', 'font'], ['#set-
   });
 }
 $('#set-md').addEventListener('change', (e) => setShowMd(e.target.checked));
+$('#set-tips').addEventListener('change', (e) => {
+  prefs.tooltips = e.target.checked;
+  save('prefs', prefs);
+  if (prefs.tooltips) restoreTooltips();
+});
 $('#settings-close').addEventListener('click', () => $('#settings').close());
 
 function setImageMode(mode) {
@@ -346,6 +351,25 @@ function setImageMode(mode) {
   ui.refresh();
 }
 $('#set-images').addEventListener('change', (e) => setImageMode(e.target.value));
+
+// Tooltips (Settings): when off, an element's title is set aside the moment
+// the pointer reaches it, before the browser can show it. Titles set later
+// (e.g. on re-render) are caught the same way.
+document.addEventListener('mouseover', (e) => {
+  if (prefs.tooltips) return;
+  for (let el = e.target; el && el.removeAttribute; el = el.parentElement) {
+    const t = el.getAttribute('title');
+    if (t === null) continue;
+    if (t) el.dataset.tip = t;
+    el.removeAttribute('title');
+  }
+}, true);
+function restoreTooltips() {
+  for (const el of document.querySelectorAll('[data-tip]')) {
+    if (!el.hasAttribute('title')) el.setAttribute('title', el.dataset.tip);
+    delete el.dataset.tip;
+  }
+}
 
 function setShowMd(on) {
   prefs.showMd = on;
@@ -362,6 +386,7 @@ function openSettings() {
   $('#set-backup').value = String(prefs.backupKeep);
   $('#set-images').value = prefs.images;
   $('#set-md').checked = !!prefs.showMd;
+  $('#set-tips').checked = !!prefs.tooltips;
   if (!$('#settings').open) $('#settings').showModal();
 }
 

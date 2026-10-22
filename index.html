@@ -21,6 +21,8 @@
 <body>
   <header>
     <button id="side-btn" class="icon" type="button" aria-label="Documents">☰</button>
+    <button id="back-btn" class="icon nav-btn" type="button" aria-label="Back" title="Back (Ctrl+[)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button id="fwd-btn" class="icon nav-btn" type="button" aria-label="Forward" title="Forward (Ctrl+])"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
     <nav id="crumbs"></nav>
     <input id="search" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
     <button id="search-all" type="button" aria-pressed="false" title="Search all documents (instead of only this one)">All</button>
@@ -78,10 +80,10 @@
     <div class="prow">
       <button type="button" tabindex="-1" data-color="1" class="sw cl-1" aria-label="Red"></button>
       <button type="button" tabindex="-1" data-color="2" class="sw cl-2" aria-label="Orange"></button>
-      <button type="button" tabindex="-1" data-color="3" class="sw cl-3" aria-label="Yellow"></button>
-      <button type="button" tabindex="-1" data-color="4" class="sw cl-4" aria-label="Green"></button>
-      <button type="button" tabindex="-1" data-color="5" class="sw cl-5" aria-label="Blue"></button>
-      <button type="button" tabindex="-1" data-color="6" class="sw cl-6" aria-label="Purple"></button>
+      <button type="button" tabindex="-1" data-color="3" class="sw cl-3" aria-label="Amber"></button>
+      <button type="button" tabindex="-1" data-color="4" class="sw cl-4" aria-label="Yellow"></button>
+      <button type="button" tabindex="-1" data-color="5" class="sw cl-5" aria-label="Yellow-green"></button>
+      <button type="button" tabindex="-1" data-color="6" class="sw cl-6" aria-label="Green"></button>
       <button type="button" tabindex="-1" data-color="0" class="sw none" aria-label="No color">✕</button>
     </div>
     <div class="prow">
@@ -155,7 +157,7 @@
       <tr><td>Stop editing</td><td>Esc</td></tr>
 
       <tr><th colspan="2">Formatting</th></tr>
-      <tr><td>Color the line red, orange, yellow, green, blue, purple (again to remove)</td><td>Ctrl+1 … Ctrl+6</td></tr>
+      <tr><td>Color the line, from red (1) to green (6) (again to remove)</td><td>Ctrl+1 … Ctrl+6</td></tr>
       <tr><td>Remove color</td><td>Ctrl+0</td></tr>
       <tr><td>Heading 1 / 2 / 3 (again to remove)</td><td>Ctrl+Alt+1 … 3</td></tr>
       <tr><td>Normal text</td><td>Ctrl+Alt+0</td></tr>
@@ -187,6 +189,7 @@
       <tr><td>Set a column's width (double-click the edge for automatic)</td><td>Drag a column edge</td></tr>
 
       <tr><th colspan="2">App</th></tr>
+      <tr><td>Back / forward between views (or the ‹ › buttons at the top)</td><td>Ctrl+[ / Ctrl+]</td></tr>
       <tr><td>Search (the <b>All</b> button searches every document)</td><td>Ctrl+F</td></tr>
       <tr><td>Sync now (or tap the sync icon)</td><td>Ctrl+S</td></tr>
       <tr><td>Settings</td><td>Ctrl+,</td></tr>
@@ -239,6 +242,9 @@
     </label>
     <label class="field">Show formatting characters while editing (Ctrl+M)
       <input id="set-md" type="checkbox">
+    </label>
+    <label class="field">Show tooltips on buttons and links
+      <input id="set-tips" type="checkbox">
     </label>
     <p id="font-sample" class="sample">The quick brown fox jumps over the lazy dog. 0123456789</p>
     <button id="settings-close" type="button">Done</button>

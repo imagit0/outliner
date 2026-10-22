@@ -10,7 +10,7 @@ No build step: plain HTML/CSS/ES modules.
 - The ⋯ left of a document's title: Delete completed items, Expand all, Collapse all (for the document, or the item you're zoomed into).
 - Right-click an item's bullet for a menu: zoom, complete, collapse, color, heading, duplicate, move to document, delete. Right-clicking text still gives the browser's menu (spelling, cut/copy/paste).
 - Nested bullets: Enter, Tab / Shift+Tab, move, collapse, complete (strikethrough), hide completed
-- Line colors: Ctrl+1–6 (red, orange, yellow, green, blue, purple), Ctrl+0 to clear
+- Line colors: Ctrl+1–6 (a spectrum from red to green), Ctrl+0 to clear
 - Drag and drop: drag a bullet to move an item (long-press first on touch). Drop it on a sidebar document to move it there, or between documents to turn it into a document.
 - Each line has a dot, or a triangle if it has children (click it to collapse or expand); drag either one to move the line
 - Zoom into any item with the magnifier that appears when you hover a line (or Alt+→, or the toolbar's zoom button on phones). Breadcrumbs show where you are, and the Android back button zooms back out.
