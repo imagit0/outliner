@@ -5,7 +5,7 @@ import { Outline, ROOT, sameNodes } from '../js/model.js';
 import { Sync } from '../js/sync.js';
 import { memoryKV } from '../js/idb.js';
 import { LocalStore, takeNewerSynced } from '../js/local.js';
-import { remapColors9, COLORS9_CUTOFF } from '../js/migrate.js';
+import { remapColors, V37, V38, V39 } from '../js/migrate.js';
 import { split, join, pack, unpack, gzip, gunzip, shardMap, INDEX } from '../js/shards.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -332,29 +332,36 @@ export function syncTests(test, { eq, ok }) {
     ok(sameNodes(again, o.nodes), 'reload');
   });
 
-  // Lines colored 1..6 (old scale) before the cutoff, plus some that must
-  // stay as they are.
+  // Colored lines from every era (see migrate.js), plus uncolored ones.
+  const CUTS = { V37, V38, V39: V38 + 3_600_000 };
+  const ERA = { orig: V37 - 60_000, v37: V37 + 60_000, v38: V38 + 60_000, now: CUTS.V39 + 60_000 };
+  const CASES = [
+    // [era, color now, expected color]
+    ['orig', 1, 1], ['orig', 2, 2], ['orig', 3, 3], ['orig', 4, 5], ['orig', 5, 6], ['orig', 6, 7],
+    ['v37', 2, 2], ['v37', 7, 4], ['v37', 9, 5],
+    ['v38', 1, 1], ['v38', 3, 2], ['v38', 4, 3], ['v38', 6, 5], ['v38', 7, 6], ['v38', 9, 7], ['v38', 5, 3], ['v38', 8, 5],
+    ['now', 8, 8], ['now', 4, 4], ['orig', 0, 0], ['v38', 0, 0],
+  ];
+  const MOVED = CASES.filter(([, a, b]) => a !== b).length;
+  const EXPECTED = CASES.map(([, , b]) => b);
   const colored = () => {
-    const { nodes, todo, notes } = sample();
+    const { nodes, notes } = sample();
     const o = new Outline(nodes);
-    const old = COLORS9_CUTOFF - 60_000;
     const lines = o.children(notes);
-    for (let c = 1; c <= 6; c++) Object.assign(lines[c], { cl: c, m: old });
-    Object.assign(lines[7], { cl: 2, m: COLORS9_CUTOFF + 60_000 }); // colored on the new scale
-    Object.assign(lines[8], { cl: 0, m: old });
-    return { nodes: o.nodes, ids: lines.slice(1, 9).map((n) => n.id), notes, todo };
+    CASES.forEach(([era, cl], i) => Object.assign(lines[i + 1], { cl, m: ERA[era] }));
+    return { nodes: o.nodes, ids: lines.slice(1, CASES.length + 1).map((n) => n.id) };
   };
   const colorsOf = (o, ids) => ids.map((id) => o.get(id).cl || 0);
-  const MAPPED = [1, 3, 4, 6, 7, 9, 2, 0];
 
-  test('colors: old 6-step colors move to the 9-step scale exactly once', () => {
-    eq(COLORS9_CUTOFF, 1792675596000, 'cutoff is the v37 commit');
+  test('colors: each era of line colors moves to the v39 scale exactly once', () => {
+    eq([V37, V38], [1792675596000, 1792675804000], 'release times');
+    ok(V39 > V38 && V39 < V38 + 86_400_000, 'V39 is set to the release time');
     const { nodes, ids } = colored();
     const o = new Outline(structuredClone(nodes));
-    eq(remapColors9(o), 6);
-    eq(colorsOf(o, ids), MAPPED);
-    eq(remapColors9(o), 0, 'second run changes nothing');
-    eq(colorsOf(o, ids), MAPPED);
+    eq(remapColors(o, CUTS), MOVED);
+    eq(colorsOf(o, ids), EXPECTED);
+    eq(remapColors(o, CUTS), 0, 'second run changes nothing');
+    eq(colorsOf(o, ids), EXPECTED);
   });
 
   test('colors: two devices remapping (in either order) never remap twice', () => withLocal(async () => {
@@ -365,23 +372,23 @@ export function syncTests(test, { eq, ok }) {
     await A.sync();
     let B = await device(server, nodes);
     await B.sync();
-    remapColors9(A.o);
-    remapColors9(B.o);
+    remapColors(A.o, CUTS);
+    remapColors(B.o, CUTS);
     await A.sync(); await B.sync(); await A.sync();
-    eq(colorsOf(A.o, ids), MAPPED, 'A');
-    eq(colorsOf(B.o, ids), MAPPED, 'B');
+    eq(colorsOf(A.o, ids), EXPECTED, 'A');
+    eq(colorsOf(B.o, ids), EXPECTED, 'B');
     // A remaps and syncs first; B gets the result, then runs its own remap.
     server = fakeDropbox();
     A = await device(server, nodes);
     await A.sync();
     B = await device(server, nodes);
     await B.sync();
-    remapColors9(A.o);
+    remapColors(A.o, CUTS);
     await A.sync();
     await B.sync();
-    eq(remapColors9(B.o), 0, 'B has nothing left to remap');
+    eq(remapColors(B.o, CUTS), 0, 'B has nothing left to remap');
     await B.sync(); await A.sync();
-    eq(colorsOf(A.o, ids), MAPPED, 'A after');
-    eq(colorsOf(B.o, ids), MAPPED, 'B after');
+    eq(colorsOf(A.o, ids), EXPECTED, 'A after');
+    eq(colorsOf(B.o, ids), EXPECTED, 'B after');
   }));
 }

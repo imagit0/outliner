@@ -12,7 +12,7 @@ import { LocalStore, takeNewerSynced } from './local.js';
 import { idbKV } from './idb.js';
 import { gunzip, isGzip } from './shards.js';
 import { VERSION } from './config.js';
-import { remapColors9 } from './migrate.js';
+import { remapColors } from './migrate.js';
 
 const $ = (s) => document.querySelector(s);
 $('#app-version').textContent = VERSION;
@@ -93,22 +93,22 @@ const ui = new UI(outline, {
   },
 });
 
-// One-time: move line colors from the old 6-step scale to the 9-step one.
+// One-time: move line colors to the v39 scale (see migrate.js).
 // Runs after this session's first successful sync (or right away when not
 // syncing), so a color changed on another device since the release is
 // already here and isn't overwritten by a remap of a stale copy.
-let colorsRemapped = !!(await idbKV.get('migrate:colors9'));
+let colorsRemapped = !!(await idbKV.get('migrate:colors-v39'));
 async function remapColorsOnce() {
   if (colorsRemapped) return;
   colorsRemapped = true;
-  const moved = remapColors9(outline);
+  const moved = remapColors(outline);
   if (moved) {
     ui.onChange();
     persistNow();
     ui.refresh();
-    console.info(`moved ${moved} line color(s) to the 9-color scale`);
+    console.info(`moved ${moved} line color(s) to the new color scale`);
   }
-  await idbKV.put('migrate:colors9', true);
+  await idbKV.put('migrate:colors-v39', true);
 }
 
 const sync = new Sync({
