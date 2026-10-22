@@ -418,7 +418,7 @@ export class UI {
     });
   }
 
-  // Color label 1-6; choosing the current color again (or 0) removes it.
+  // Color label 1-9 (red to green); choosing the current color again (or 0) removes it.
   setColor(id, c) {
     const off = this.caretOf(id);
     this.op(() => {
@@ -652,7 +652,7 @@ export class UI {
       const f = it && typeof it.fields === 'object' ? it.fields : {};
       const fields = { t: typeof f.t === 'string' ? f.t.replace(/\n/g, ' ') : '' };
       for (const k of ['d', 'c', 'tb', 'hd', 'nb']) if (f[k] === true) fields[k] = true;
-      if (Number.isInteger(f.cl) && f.cl >= 1 && f.cl <= 6) fields.cl = f.cl;
+      if (Number.isInteger(f.cl) && f.cl >= 1 && f.cl <= 9) fields.cl = f.cl;
       if (Number.isInteger(f.h) && f.h >= 1 && f.h <= 3) fields.h = f.h;
       if (typeof f.cw === 'string' && /^[\d,]*$/.test(f.cw)) fields.cw = f.cw;
       return { fields, children: Array.isArray(it?.children) ? it.children.map(clean) : [] };
@@ -899,7 +899,7 @@ export class UI {
       { label: 'Expand all', run: () => this.setAllCollapsed(false, id) },
       { label: 'Collapse all', run: () => this.setAllCollapsed(true, id) },
       'sep',
-      { swatches: [1, 2, 3, 4, 5, 6, 0], run: (c) => this.setColor(id, c) },
+      { swatches: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0], run: (c) => this.setColor(id, c) },
       { buttons: [
           { label: 'H1', value: 1, title: 'Heading 1' }, { label: 'H2', value: 2, title: 'Heading 2' },
           { label: 'H3', value: 3, title: 'Heading 3' }, { label: '¶', value: 0, title: 'Normal text' },
@@ -1356,9 +1356,9 @@ export class UI {
     // Table cells
     if (this.o.isCell(id)) {
       if (key === 'Tab') { handled(); return this.cellStep(id, e.shiftKey ? -1 : 1); }
-      // Row color: Ctrl+Shift+0..6, or Ctrl+Alt+0..6 (headings don't apply in
+      // Row color: Ctrl+Shift+0..9, or Ctrl+Alt+0..9 (headings don't apply in
       // cells, and some PCs swallow Ctrl+Shift+0).
-      if (mod && (e.shiftKey !== e.altKey) && /^(Digit|Numpad)[0-6]$/.test(e.code)) {
+      if (mod && (e.shiftKey !== e.altKey) && /^(Digit|Numpad)[0-9]$/.test(e.code)) {
         handled();
         return this.setRowColor(id, Number(e.code.slice(-1)));
       }
@@ -1399,7 +1399,7 @@ export class UI {
     if ((mod || e.altKey) && e.shiftKey && key === 'ArrowDown') { handled(); return this.moveDown(id); }
     if (mod && key === 'ArrowUp') { handled(); return this.setCollapsed(id, true); }
     if (mod && key === 'ArrowDown') { handled(); return this.setCollapsed(id, false); }
-    if (mod && !e.altKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
+    if (mod && !e.altKey && /^(Digit|Numpad)[0-9]$/.test(e.code)) { handled(); return this.setColor(id, Number(e.code.slice(-1))); }
     if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyH') { handled(); return this.wrap(id, '=='); }
     if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyT') { handled(); return this.wrap(id, '~~'); }
     if (mod && e.altKey && !e.shiftKey && /^(Digit|Numpad)[0-3]$/.test(e.code)) { handled(); return this.setHeading(id, Number(e.code.slice(-1))); }

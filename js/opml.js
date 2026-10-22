@@ -78,7 +78,7 @@ export function parseOPML(text) {
     const h = num(el, 'heading', '_heading');
     const fields = { t: (el.getAttribute('text') ?? el.getAttribute('title') ?? '').replace(/\r?\n/g, ' ') };
     if (flag(el, 'complete', '_complete', 'checked')) fields.d = true;
-    if (cl >= 1 && cl <= 6) fields.cl = cl;
+    if (cl >= 1 && cl <= 9) fields.cl = cl;
     if (h >= 1 && h <= 3) fields.h = h;
     if (flag(el, 'collapsed', '_collapsed')) fields.c = true;
     const isTable = flag(el, 'table');

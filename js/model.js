@@ -12,7 +12,7 @@
 //   t   text
 //   d   done (bool)
 //   c   collapsed (bool)
-//   cl  color label 1-6 (0 or missing = none)
+//   cl  color label 1-9, red to green (0 or missing = none)
 //   f   folder (bool; missing = false)
 //   h   heading level 1-3 (0 or missing = normal text)
 //   tb  table (bool): its children are rows, the rows' children are cells

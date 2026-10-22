@@ -142,7 +142,7 @@ export const selectMethods = {
     if (e.key === 'Escape') { done(); return this.clearLineSelection(); }
     if (e.key === 'Delete' || e.key === 'Backspace') { done(); return this.deleteLines(); }
     if (e.key === 'Tab') { done(); return e.shiftKey ? this.outdentLines() : this.indentLines(); }
-    if (mod && !e.shiftKey && !e.altKey && /^(Digit|Numpad)[0-6]$/.test(e.code)) { done(); return this.colorLines(Number(e.code.slice(-1))); }
+    if (mod && !e.shiftKey && !e.altKey && /^(Digit|Numpad)[0-9]$/.test(e.code)) { done(); return this.colorLines(Number(e.code.slice(-1))); }
     if (mod && e.key === 'Enter') { done(); return this.completeLines(); }
     if (mod && !e.shiftKey && e.code === 'KeyD') { done(); return this.duplicateLines(); }
     if (mod && ['KeyC', 'KeyX', 'KeyZ', 'KeyY'].includes(e.code)) return; // copy/cut events, undo
