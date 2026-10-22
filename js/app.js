@@ -12,6 +12,7 @@ import { LocalStore, takeNewerSynced } from './local.js';
 import { idbKV } from './idb.js';
 import { gunzip, isGzip } from './shards.js';
 import { VERSION } from './config.js';
+import { remapColors9 } from './migrate.js';
 
 const $ = (s) => document.querySelector(s);
 $('#app-version').textContent = VERSION;
@@ -92,6 +93,24 @@ const ui = new UI(outline, {
   },
 });
 
+// One-time: move line colors from the old 6-step scale to the 9-step one.
+// Runs after this session's first successful sync (or right away when not
+// syncing), so a color changed on another device since the release is
+// already here and isn't overwritten by a remap of a stale copy.
+let colorsRemapped = !!(await idbKV.get('migrate:colors9'));
+async function remapColorsOnce() {
+  if (colorsRemapped) return;
+  colorsRemapped = true;
+  const moved = remapColors9(outline);
+  if (moved) {
+    ui.onChange();
+    persistNow();
+    ui.refresh();
+    console.info(`moved ${moved} line color(s) to the 9-color scale`);
+  }
+  await idbKV.put('migrate:colors9', true);
+}
+
 const sync = new Sync({
   getNodes: () => outline.nodes,
   replaceNodes(n) {
@@ -118,6 +137,8 @@ if (!(await idbKV.get('repair:stale-local'))) {
   await idbKV.put('repair:stale-local', true);
 }
 
+if (!dropbox.isConnected()) await remapColorsOnce();
+
 // ---------- sync status ----------
 const STATUS = {
   off: ['', 'Not syncing — connect Dropbox in the menu'],
@@ -134,7 +155,10 @@ function setStatus(state, detail = '') {
   el.dataset.state = state;
   el.title = detail ? `${label}: ${detail}` : label;
   renderMenu();
-  if (state === 'ok') runBackup();
+  if (state === 'ok') {
+    remapColorsOnce();
+    runBackup();
+  }
 }
 
 // ---------- daily backup ----------

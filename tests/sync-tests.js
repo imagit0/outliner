@@ -5,6 +5,7 @@ import { Outline, ROOT, sameNodes } from '../js/model.js';
 import { Sync } from '../js/sync.js';
 import { memoryKV } from '../js/idb.js';
 import { LocalStore, takeNewerSynced } from '../js/local.js';
+import { remapColors9, COLORS9_CUTOFF } from '../js/migrate.js';
 import { split, join, pack, unpack, gzip, gunzip, shardMap, INDEX } from '../js/shards.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -330,4 +331,57 @@ export function syncTests(test, { eq, ok }) {
     const again = await new LocalStore(kv).load();
     ok(sameNodes(again, o.nodes), 'reload');
   });
+
+  // Lines colored 1..6 (old scale) before the cutoff, plus some that must
+  // stay as they are.
+  const colored = () => {
+    const { nodes, todo, notes } = sample();
+    const o = new Outline(nodes);
+    const old = COLORS9_CUTOFF - 60_000;
+    const lines = o.children(notes);
+    for (let c = 1; c <= 6; c++) Object.assign(lines[c], { cl: c, m: old });
+    Object.assign(lines[7], { cl: 2, m: COLORS9_CUTOFF + 60_000 }); // colored on the new scale
+    Object.assign(lines[8], { cl: 0, m: old });
+    return { nodes: o.nodes, ids: lines.slice(1, 9).map((n) => n.id), notes, todo };
+  };
+  const colorsOf = (o, ids) => ids.map((id) => o.get(id).cl || 0);
+  const MAPPED = [1, 3, 4, 6, 7, 9, 2, 0];
+
+  test('colors: old 6-step colors move to the 9-step scale exactly once', () => {
+    eq(COLORS9_CUTOFF, 1792675596000, 'cutoff is the v37 commit');
+    const { nodes, ids } = colored();
+    const o = new Outline(structuredClone(nodes));
+    eq(remapColors9(o), 6);
+    eq(colorsOf(o, ids), MAPPED);
+    eq(remapColors9(o), 0, 'second run changes nothing');
+    eq(colorsOf(o, ids), MAPPED);
+  });
+
+  test('colors: two devices remapping (in either order) never remap twice', () => withLocal(async () => {
+    const { nodes, ids } = colored();
+    // Both remap their own copy, then sync.
+    let server = fakeDropbox();
+    let A = await device(server, nodes);
+    await A.sync();
+    let B = await device(server, nodes);
+    await B.sync();
+    remapColors9(A.o);
+    remapColors9(B.o);
+    await A.sync(); await B.sync(); await A.sync();
+    eq(colorsOf(A.o, ids), MAPPED, 'A');
+    eq(colorsOf(B.o, ids), MAPPED, 'B');
+    // A remaps and syncs first; B gets the result, then runs its own remap.
+    server = fakeDropbox();
+    A = await device(server, nodes);
+    await A.sync();
+    B = await device(server, nodes);
+    await B.sync();
+    remapColors9(A.o);
+    await A.sync();
+    await B.sync();
+    eq(remapColors9(B.o), 0, 'B has nothing left to remap');
+    await B.sync(); await A.sync();
+    eq(colorsOf(A.o, ids), MAPPED, 'A after');
+    eq(colorsOf(B.o, ids), MAPPED, 'B after');
+  }));
 }
