@@ -1062,6 +1062,10 @@ export class UI {
     m.addEventListener('focusout', (e) => {
       const el = e.target;
       if (!el.classList.contains('text')) return;
+      // The whole window lost focus (another app, or the mouse leaving with
+      // Windows' focus-follows-mouse): the line stays the active one, so keep
+      // its text (and the cursor in it) as it is.
+      if (document.activeElement === el) return;
       const n = this.o.get(el.dataset.id);
       if (n && el.isConnected) el.innerHTML = format(n.t);
       setTimeout(() => {
