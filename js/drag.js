@@ -4,10 +4,17 @@
 //   mouse: press and move a few pixels to start dragging
 //   touch: long-press (~350ms) to start, so normal taps and scrolling still work
 //
+// A dragged item is shown as a copy of its line where it would land, with the
+// other lines reflowing around it; the original stays greyed until the drop.
+// Targets are worked out from where the lines were when the drag started, so
+// the reflow can't change what the pointer is over. Collapsed lines stay closed.
+//
 // Drop targets:
 //   item row      top half = before, bottom half = after; bottom half while
-//                 pointing further right (or onto an expanded item) = first child
-//   title         first child of the zoomed item
+//                 pointing further right (or onto an expanded item) = first child;
+//                 left of the last line in a group = after its parent
+//   above lines   first child of the zoomed item
+//   below lines   after the last top-level item
 //   sidebar doc   item: middle = move into that document, edges = becomes a
 //                 document there; document/folder: before / after (reorder)
 //   sidebar folder  middle = into the folder (an item becomes a document
@@ -100,11 +107,15 @@ export class Drag {
     clearTimeout(s.timer);
     s.active = true;
     if (s.touch && navigator.vibrate) navigator.vibrate(15);
-    const n = this.ui.o.get(s.id);
-    this.ghost = document.createElement('div');
-    this.ghost.className = 'drag-ghost';
-    this.ghost.textContent = (n && n.t) ? (n.t.length > 50 ? n.t.slice(0, 50) + '…' : n.t) : 'Untitled';
-    document.body.append(this.ghost);
+    if (s.kind === 'doc') {
+      const n = this.ui.o.get(s.id);
+      this.ghost = document.createElement('div');
+      this.ghost.className = 'drag-ghost';
+      this.ghost.textContent = (n && n.t) ? (n.t.length > 50 ? n.t.slice(0, 50) + '…' : n.t) : 'Untitled';
+      document.body.append(this.ghost);
+    } else {
+      this.snapshot();
+    }
     document.body.classList.add('dragging');
     s.src.classList.add('drag-src');
     this.update();
@@ -128,6 +139,8 @@ export class Drag {
     document.body.classList.remove('dragging');
     if (this.s) this.s.src.classList.remove('drag-src');
     this.clearMarks();
+    this.clearPreview();
+    this.lines = null;
     this.reset();
   }
 
@@ -152,11 +165,12 @@ export class Drag {
   // Work out the drop target under the pointer and show where it would land.
   update() {
     const s = this.s;
-    this.ghost.style.transform = `translate(${s.x + 14}px, ${s.y + 10}px)`;
+    if (this.ghost) this.ghost.style.transform = `translate(${s.x + 14}px, ${s.y + 10}px)`;
     this.clearMarks();
     this.target = null;
     const el = document.elementFromPoint(s.x, s.y);
     this.overSidebar = !!(el && el.closest('#sidebar'));
+    if (!el || this.overSidebar) this.clearPreview();
     if (!el) return;
 
     // Sidebar documents and folders
@@ -179,58 +193,134 @@ export class Drag {
       this.target = { id, where };
       return;
     }
-    if (s.kind === 'doc') return; // documents and folders stay in the sidebar
+    if (s.kind === 'doc' || this.overSidebar) return; // documents and folders stay in the sidebar
 
+    this.target = this.itemTarget();
+    this.showPreview(this.target);
+  }
+
+  // Where the outline's lines are, in page coordinates, with no preview in the
+  // way. Tables count as one line (their cells aren't drop targets).
+  snapshot() {
     const main = $('#outline');
-    const mainR = main.getBoundingClientRect();
-    const right = mainR.right - 16;
+    this.clearPreview();
+    const s = this.s;
+    s.src = main.querySelector(`.item[data-item="${s.id}"]`) || s.src;
+    s.src.classList.add('drag-src');
+    const items = [...main.querySelectorAll('.list .item[data-item]')]
+      .filter((el) => el.dataset.item && !el.closest('table'));
+    const top = scrollY;
+    this.lines = items.map((item) => {
+      const row = item.querySelector(':scope > .row');
+      const r = row.getBoundingClientRect();
+      return {
+        item, row, id: item.dataset.item,
+        top: r.top + top,
+        bottom: r.bottom + top,
+        textLeft: row.querySelector('.text').getBoundingClientRect().left,
+        expanded: !!item.querySelector(':scope > .children'),
+        isTable: item.classList.contains('table-item'),
+      };
+    });
+    this.byItem = new Map(this.lines.map((l) => [l.item, l]));
+    const tops = this.lines.filter((l) => l.item.parentElement.classList.contains('list'));
+    const last = tops[tops.length - 1];
+    this.listEnd = last ? { line: last, bottom: last.item.getBoundingClientRect().bottom + top } : null;
+  }
 
-    // Title: becomes the first item
-    const title = el.closest('#outline .title');
-    if (title) {
-      const r = title.getBoundingClientRect();
-      this.showLine(r.bottom + 4, r.left, right);
-      this.target = { id: this.ui.zoom, where: 'child' };
-      return;
+  itemTarget() {
+    const s = this.s;
+    // A sync redrew the outline under us: measure again.
+    if (!this.lines || !this.lines.length || !this.lines[0].item.isConnected) this.snapshot();
+    const lines = this.lines;
+    if (!lines.length) return null;
+    const y = s.y + scrollY;
+    const allowed = (id) => id !== s.id && !this.ui.o.isAncestor(s.id, id);
+
+    // Above the first line: the first item. Below them all: the last item.
+    if (y < lines[0].top) return $('#outline .title') ? { id: this.ui.zoom, where: 'child' } : null;
+    if (this.listEnd && y > this.listEnd.bottom) {
+      const { id } = this.listEnd.line;
+      return allowed(id) ? { id, where: 'after' } : null;
     }
 
-    let row = el.closest('#outline .row');
-    if (!row) {
-      const item = el.closest('#outline .item');
-      if (item) row = item.querySelector(':scope > .row');
+    // The last line starting above the pointer (a table's cells belong to it).
+    let lo = 0;
+    for (let hi = lines.length - 1; lo < hi;) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lines[mid].top <= y) lo = mid;
+      else hi = mid - 1;
     }
-    if (!row && main.contains(el)) {
-      // Below the list: after the last top-level item.
-      const rows = main.querySelectorAll('.list > .item > .row');
-      const lastRow = rows[rows.length - 1];
-      if (lastRow && s.y > lastRow.getBoundingClientRect().bottom) {
-        const lastItem = lastRow.parentElement;
-        if (lastItem.dataset.item !== s.id) {
-          const r = lastItem.getBoundingClientRect();
-          const left = lastRow.querySelector('.text').getBoundingClientRect().left;
-          this.showLine(r.bottom, left, right);
-          this.target = { id: lastItem.dataset.item, where: 'after' };
+    const line = lines[lo];
+    if (!allowed(line.id)) return null; // onto itself
+    if (y < (line.top + line.bottom) / 2) return { id: line.id, where: 'before' };
+    if (!line.isTable && (line.expanded || s.x > line.textLeft + 40)) return { id: line.id, where: 'child' };
+
+    // Left of a group's last line: climb out to the level the pointer is at.
+    let at = line;
+    while (s.x < at.textLeft && !this.nextItem(at.item)) {
+      const up = this.byItem.get(at.item.parentElement.closest('.item'));
+      if (!up) break;
+      at = up;
+    }
+    return { id: at.id, where: 'after' };
+  }
+
+  // The sibling below an item, ignoring the one being dragged.
+  nextItem(item) {
+    let next = item.nextElementSibling;
+    while (next && (next === this.s.src || next === this.preview)) next = next.nextElementSibling;
+    return next;
+  }
+
+  // Show a copy of the dragged line at the target, reflowing the lines below.
+  showPreview(t) {
+    const key = t ? `${t.id}|${t.where}` : '';
+    if (key === this.previewKey && (!t || this.preview?.isConnected)) return;
+    this.clearPreview();
+    if (!t) return;
+    const main = $('#outline');
+    const p = this.previewEl();
+    if (t.id === this.ui.zoom) {
+      main.querySelector('.list')?.prepend(p);
+    } else {
+      const item = main.querySelector(`.item[data-item="${t.id}"]`);
+      if (!item) return;
+      if (t.where === 'before') item.before(p);
+      else if (t.where === 'after') item.after(p);
+      else {
+        let kids = item.querySelector(':scope > .children');
+        if (!kids) { // no list showing (a leaf, or collapsed, which stays closed)
+          kids = this.previewWrap = document.createElement('div');
+          kids.className = 'children';
+          item.append(kids);
         }
+        kids.prepend(p);
       }
-      return;
     }
-    if (!row) return;
+    this.preview = p;
+    this.previewKey = key;
+  }
 
-    const item = row.parentElement;
-    const id = item.dataset.item;
-    if (id === s.id || this.ui.o.isAncestor(s.id, id)) return; // onto itself
-    const r = row.getBoundingClientRect();
-    const textLeft = row.querySelector('.text').getBoundingClientRect().left;
-    const expanded = !!item.querySelector(':scope > .children');
-    const isTable = item.classList.contains('table-item');
-    if (!id) return; // placeholder line
-    let where;
-    if (s.y < r.top + r.height / 2) where = 'before';
-    else if (!isTable && (expanded || s.x > textLeft + 40)) where = 'child';
-    else where = 'after';
-    // "after" an expanded item would land below its whole subtree.
-    const top = where === 'before' ? r.top : where === 'after' ? item.getBoundingClientRect().bottom : r.bottom;
-    this.showLine(top, where === 'child' ? textLeft + 28 : textLeft, right);
-    this.target = { id, where };
+  previewEl() {
+    const src = this.s.src;
+    const p = document.createElement('div');
+    p.className = `item drag-preview${src.classList.contains('done') ? ' done' : ''}`;
+    const row = src.querySelector(':scope > .row').cloneNode(true);
+    row.classList.remove('selected');
+    // It's only a picture: nothing should find or edit it as the real line.
+    const text = row.querySelector('.text');
+    text.removeAttribute('contenteditable');
+    delete text.dataset.id;
+    row.querySelector('.bullet')?.classList.remove('open');
+    p.append(row);
+    return p;
+  }
+
+  clearPreview() {
+    this.preview?.remove();
+    this.previewWrap?.remove();
+    this.preview = this.previewWrap = null;
+    this.previewKey = '';
   }
 }

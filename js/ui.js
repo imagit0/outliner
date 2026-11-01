@@ -20,6 +20,7 @@ import { selectMethods, clipItems } from './select.js';
 const $ = (sel, el = document) => el.querySelector(sel);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 const narrow = () => matchMedia('(max-width: 800px)').matches;
+const RECENT_MOVES = 5; // recent documents listed in the Move dialog
 
 export class UI {
   constructor(outline, { onChange, prefs }) {
@@ -547,19 +548,34 @@ export class UI {
     const here = this.o.docOf(this.moveId)?.id;
     const path = (d) => this.o.ancestors(d.id).filter((a) => a.f).map((a) => a.t || 'Untitled folder');
     const docs = this.o.allDocs().filter((d) => (d.t || 'Untitled').toLowerCase().includes(q));
-    this.moveDlg.querySelector('ul').innerHTML = docs
-      .map((d, i) => {
-        const p = path(d);
-        return `<li data-doc="${d.id}" class="${i === 0 ? 'sel' : ''}">${ICON_DOC}<span>${esc(d.t || 'Untitled')}</span>` +
-          (p.length ? `<small>${esc(p.join(' / '))}</small>` : '') + (d.id === here ? '<small>(current)</small>' : '') + `</li>`;
-      })
-      .join('') || '<li class="none">No matching documents</li>';
+    // Not while filtering: the typed name already narrows the list.
+    const recent = q ? [] : load('recentMoves', [])
+      .filter((id) => id !== here && this.o.isDoc(id))
+      .slice(0, RECENT_MOVES)
+      .map((id) => this.o.get(id));
+    let first = true;
+    const li = (d) => {
+      const p = path(d);
+      const cls = first ? 'sel' : '';
+      first = false;
+      return `<li data-doc="${d.id}" class="${cls}">${ICON_DOC}<span>${esc(d.t || 'Untitled')}</span>` +
+        (p.length ? `<small>${esc(p.join(' / '))}</small>` : '') + (d.id === here ? '<small>(current)</small>' : '') + `</li>`;
+    };
+    const html = recent.map(li).join('') + (recent.length ? '<li class="sep" aria-hidden="true"></li>' : '') + docs.map(li).join('');
+    this.moveDlg.querySelector('ul').innerHTML = html || '<li class="none">No matching documents</li>';
+  }
+
+  // Remember a document items were moved to (newest first), for the Move dialog.
+  noteMove(docId) {
+    // One more than is shown: the current document is left out of the list.
+    save('recentMoves', [docId, ...load('recentMoves', []).filter((id) => id !== docId)].slice(0, RECENT_MOVES + 1));
   }
 
   moveTo(docId) {
     const id = this.moveId;
     this.moveDlg.close();
     if (!docId || !this.o.get(id)) return;
+    this.noteMove(docId);
     const els = [...this.main.querySelectorAll('.text')];
     const mine = (el) => el.dataset.id === id || this.o.isAncestor(id, el.dataset.id);
     const i = els.findIndex(mine);
@@ -701,6 +717,7 @@ export class UI {
   }
 
   drop(src, targetId, where) {
+    if (where === 'into' && this.o.isDoc(targetId) && !this.o.isDoc(src)) this.noteMove(targetId);
     this.op(() => (this.placeItem(src, targetId, where) ? null : false));
   }
 

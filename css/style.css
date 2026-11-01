@@ -343,7 +343,11 @@ body.line-select #outline { user-select: none; -webkit-user-select: none; }
 
 /* drag and drop */
 body.dragging, body.dragging * { cursor: grabbing !important; user-select: none !important; }
+body.dragging { overflow-anchor: none; }
 .drag-src { opacity: .4; }
+/* The dragged line, shown where it would land (see drag.js). */
+.drag-preview { pointer-events: none; }
+.drag-preview > .row { background: var(--sel); border-radius: 4px; }
 .drag-ghost {
   position: fixed; top: 0; left: 0; z-index: 50; pointer-events: none;
   max-width: 280px; padding: 4px 10px; border-radius: 6px;
@@ -468,6 +472,7 @@ body.file-drop::after {
 #move li .ico { width: 16px; height: 16px; flex: none; color: var(--muted); }
 #move li small { color: var(--muted); margin-left: auto; font-size: 12px; }
 #move li.none { color: var(--muted); cursor: default; }
+#move li.sep, #move li.sep:hover { height: 1px; padding: 0; margin: 6px 8px; border-radius: 0; background: var(--line); cursor: default; }
 
 /* ---------- touch toolbar ---------- */
 #toolbar {
