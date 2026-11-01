@@ -195,8 +195,22 @@ export class Drag {
     }
     if (s.kind === 'doc' || this.overSidebar) return; // documents and folders stay in the sidebar
 
-    this.target = this.itemTarget();
+    const t = this.itemTarget();
+    this.target = t && !this.isCurrentPlace(t) ? t : null;
     this.showPreview(this.target);
+  }
+
+  // Would this drop leave the line where it already is? (Just above the line
+  // below it, just below the line above it, or first under its own parent.)
+  isCurrentPlace(t) {
+    const src = this.s.src;
+    let prev = src.previousElementSibling;
+    if (prev === this.preview) prev = prev.previousElementSibling;
+    const next = this.nextItem(src);
+    if (t.where === 'before') return next?.dataset.item === t.id;
+    if (t.where === 'after') return prev?.dataset.item === t.id;
+    const parent = src.parentElement.closest('.item')?.dataset.item ?? this.ui.zoom;
+    return !prev && parent === t.id;
   }
 
   // Where the outline's lines are, in page coordinates, with no preview in the
