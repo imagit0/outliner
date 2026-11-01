@@ -205,7 +205,7 @@ export class Drag {
   isCurrentPlace(t) {
     const src = this.s.src;
     let prev = src.previousElementSibling;
-    if (prev === this.preview) prev = prev.previousElementSibling;
+    if (prev && prev === this.preview) prev = prev.previousElementSibling;
     const next = this.nextItem(src);
     if (t.where === 'before') return next?.dataset.item === t.id;
     if (t.where === 'after') return prev?.dataset.item === t.id;
