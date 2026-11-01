@@ -5,7 +5,7 @@
 // browser's HTTP cache nor GitHub's CDN (which keeps each file up to 10
 // minutes) can answer with an old copy right after a release.
 
-const CACHE = 'outliner-v46';
+const CACHE = 'outliner-v47';
 const SHELL = [
   './',
   'index.html',

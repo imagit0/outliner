@@ -23,6 +23,7 @@
 const $ = (s) => document.querySelector(s);
 const LONG_PRESS = 350;
 const EDGE = 70; // px from top/bottom where the page auto-scrolls
+const INDENT = 28; // px per outline level (.children margin)
 
 export class Drag {
   constructor(ui) {
@@ -269,14 +270,33 @@ export class Drag {
     // is always on it. Over the dragged line itself, that's its own spot; below
     // a table's first line (over its cells), the spot after the table.
     let slot = lo;
-    if (!allowed(lines[lo].id)) slot = lines.findIndex((l) => l.id === s.id);
-    else if (y > lines[lo].bottom) slot = lo + 1;
-    return this.slotTarget(slot, allowed);
+    let own = false;
+    if (!allowed(lines[lo].id)) {
+      own = true;
+      slot = lines.findIndex((l) => l.id === s.id);
+      const out = this.outdentTarget(lines[slot]);
+      if (out) return out;
+    } else if (y > lines[lo].bottom) slot = lo + 1;
+    return this.slotTarget(slot, allowed, own);
+  }
+
+  // Still on its own line but moved left of where it was grabbed: one level out
+  // per indent (a bullet starts left of the text, so measure from the grab).
+  outdentTarget(line) {
+    const s = this.s;
+    let levels = Math.ceil((s.x0 - 14 - s.x) / INDENT);
+    let at = line;
+    for (; levels > 0; levels--) {
+      const up = this.byItem.get(at.item.parentElement.closest('.item'));
+      if (!up) break;
+      at = up;
+    }
+    return at === line ? null : { id: at.id, where: 'after' };
   }
 
   // The drop for a spot just above lines[i] (or at the very end), at the level
   // the pointer's x asks for.
-  slotTarget(i, allowed) {
+  slotTarget(i, allowed, own = false) {
     const s = this.s;
     const next = this.lines[i], prev = this.lines[i - 1];
     if (!prev) return next && allowed(next.id) ? { id: next.id, where: 'before' } : null;
@@ -286,6 +306,7 @@ export class Drag {
       return allowed(next.id) ? { id: next.id, where: 'before' } : null;
     }
     if (!prev.isTable && s.x > prev.textLeft + 40) return { id: prev.id, where: 'child' };
+    if (own) return null; // outdenting from its own spot is outdentTarget's
     // Left of a group's last line: climb out to the level the pointer is at.
     let at = prev;
     while (s.x < at.textLeft && !this.nextItem(at.item)) {
