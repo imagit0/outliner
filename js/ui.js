@@ -335,6 +335,28 @@ export class UI {
     return true;
   }
 
+  // Delete at the end of an item: pull up the line right below, if it has
+  // nothing under it. Returns true if the line was joined.
+  joinNext(id) {
+    // While searching, the line shown below may not really be the next one.
+    if (this.query || id === this.zoom || this.o.isCell(id)) return false;
+    const ids = this.visibleIds();
+    const nextId = ids[ids.indexOf(id) + 1];
+    if (!nextId) return false;
+    const next = this.o.get(nextId);
+    // Same limits as Backspace: no merging across documents or into tables.
+    if (this.o.docOf(nextId) !== this.o.docOf(id) || this.o.isDoc(nextId) || this.o.isCell(nextId)) return false;
+    if (next.tb || this.o.hasChildren(nextId)) return false;
+    this.op(() => {
+      const n = this.o.get(id);
+      const joint = n.t.length;
+      this.o.update(id, { t: n.t + next.t });
+      this.o.remove(nextId);
+      return { id, off: joint };
+    });
+    return true;
+  }
+
   indent(id) {
     if (id === this.zoom || this.o.isCell(id)) return;
     const off = this.caretOf(id);
@@ -1128,6 +1150,13 @@ export class UI {
         case 'deleteContentBackward': {
           if (getSelection().isCollapsed && getCaret(el) === 0) {
             if (this.backspace(id)) e.preventDefault();
+            return;
+          }
+          break;
+        }
+        case 'deleteContentForward': {
+          if (getSelection().isCollapsed && getCaret(el) === el.textContent.length) {
+            if (this.joinNext(id)) e.preventDefault();
             return;
           }
           break;
