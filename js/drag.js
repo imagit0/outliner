@@ -10,9 +10,9 @@
 // the reflow can't change what the pointer is over. Collapsed lines stay closed.
 //
 // Drop targets:
-//   item row      top half = before, bottom half = after; bottom half while
-//                 pointing further right (or onto an expanded item) = first child;
-//                 left of the last line in a group = after its parent
+//   item row      takes that row's spot, below the line above it: pointing right
+//                 of that line's text = its first child; left of the last line
+//                 in a group = after its parent; otherwise its next sibling
 //   above lines   first child of the zoomed item
 //   below lines   after the last top-level item
 //   sidebar doc   item: middle = move into that document, edges = becomes a
@@ -265,13 +265,29 @@ export class Drag {
       if (lines[mid].top <= y) lo = mid;
       else hi = mid - 1;
     }
-    const line = lines[lo];
-    if (!allowed(line.id)) return null; // onto itself
-    if (y < (line.top + line.bottom) / 2) return { id: line.id, where: 'before' };
-    if (!line.isTable && (line.expanded || s.x > line.textLeft + 40)) return { id: line.id, where: 'child' };
+    // The preview takes the spot of the line under the pointer, so the pointer
+    // is always on it. Over the dragged line itself, that's its own spot; below
+    // a table's first line (over its cells), the spot after the table.
+    let slot = lo;
+    if (!allowed(lines[lo].id)) slot = lines.findIndex((l) => l.id === s.id);
+    else if (y > lines[lo].bottom) slot = lo + 1;
+    return this.slotTarget(slot, allowed);
+  }
 
+  // The drop for a spot just above lines[i] (or at the very end), at the level
+  // the pointer's x asks for.
+  slotTarget(i, allowed) {
+    const s = this.s;
+    const next = this.lines[i], prev = this.lines[i - 1];
+    if (!prev) return next && allowed(next.id) ? { id: next.id, where: 'before' } : null;
+    if (!allowed(prev.id)) return null; // just below the dragged line: same place
+    // First under an expanded line: only one level is possible.
+    if (next && next.item.parentElement.closest('.item') === prev.item) {
+      return allowed(next.id) ? { id: next.id, where: 'before' } : null;
+    }
+    if (!prev.isTable && s.x > prev.textLeft + 40) return { id: prev.id, where: 'child' };
     // Left of a group's last line: climb out to the level the pointer is at.
-    let at = line;
+    let at = prev;
     while (s.x < at.textLeft && !this.nextItem(at.item)) {
       const up = this.byItem.get(at.item.parentElement.closest('.item'));
       if (!up) break;
